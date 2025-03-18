@@ -1,0 +1,5 @@
+pvbtcalc/
+__pycache__/
+.env
+*.pyc
+migrations/
