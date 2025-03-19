@@ -1,11 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from app.schemas import PVBtInputCurve, PVBtOutputCurveWhithDetails
 from app.services.PVBTfunc import AcidType, PVBtMaster
-
+from app.core.security import get_current_user
 router = APIRouter()
 
 @router.post("/pvbtcurve", response_model=PVBtOutputCurveWhithDetails)
-def calculate_pvbt(data: PVBtInputCurve):
+def calculate_pvbt(data: PVBtInputCurve, current_user:dict = Depends(get_current_user)):
     master = PVBtMaster(
         acidtype=AcidType.getAcidTypeByStr(data.acid_type),
         acid_concentration=data.acid_concentration,
