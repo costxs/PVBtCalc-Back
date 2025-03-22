@@ -7,10 +7,22 @@ HARDCODED_USERS = {
         "username": "Administrator",
         "hashad_password": pwd_context.hash("AdminTech")
     },
-    "lcpetro":{
+    "lcpetro@pvbt":{
         "username":"LcPetro",
-        "hashad_password": pwd_context.hash("pvbtcalc@2025"),
-    }
+        "hashad_password": pwd_context.hash("pvbtcalc2025")
+    },
+    "pedro@aum":{
+        "username":"Pedro Aum",
+        "hashad_password": pwd_context.hash('PedroPvbt')
+    },
+    "claudio@lucas":{
+        "username":"Cláudio Lucas",
+        "hashad_password": pwd_context.hash('ClaudioPvbt')
+    },
+    "daniel@nobre":{
+        "username":"Daniel Nobre",
+        "hashad_password": pwd_context.hash('DanielPvbt')
+    },
 }
 
 def verify_user_password(plain_password: str, email: str) -> bool:
