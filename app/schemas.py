@@ -22,12 +22,35 @@ class PVBtInputCurve(BaseModel):
     minimum_flowrate: float
     step_numbers: int
 
+class AnalicalInput(BaseModel):
+    analitical_param: str
+    acid_type: str
+    acid_concentration: float
+    core_diameter: float
+    core_length: float
+    core_porosity: float
+    rock_type: str
+    temperature: float
+    flowrate: float
+    minimum_analitical: float
+    step_numbers: int
+
 class PVBtOutputPoint(BaseModel):
     pore_volume_to_breakthrough: float
 
 class PVBtOutputCurveWhithDetails(BaseModel):
     pvbtpoints: List[float]
     flowratepoints: List[float]
+    insterticialvelocity: List[float]
+    ida: List[float]
+    volumetobt: List[float]
+    timetobt: List[float]
+    wormholevelocity: List[float]
+    darcyvelocity: List[float]
+
+class PVBtOutputAnalitical(BaseModel):
+    pvbtpoints: List[float]
+    analiticalpoints: List[float]
     insterticialvelocity: List[float]
     ida: List[float]
     volumetobt: List[float]

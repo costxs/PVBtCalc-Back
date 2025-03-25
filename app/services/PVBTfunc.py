@@ -292,20 +292,30 @@ class PVBtMaster:
             rock_type: RockType,
             temperature,
             flowrate,
+            minimun_temperature = None,
             minimun_flowrate = None,
-            step_numbers = None,         
+            step_numbers = None,
+            minimum_diameter = None,
+            mininum_length = None,
+            minimum_porosity = None,
+            minimum_concentration = None,
     ):
-        self.ConvertUnits(core_diameter, core_length, temperature, flowrate, minimun_flowrate)
+        self.ConvertUnits(core_diameter, core_length, temperature, flowrate, minimun_flowrate, minimun_temperature, minimum_diameter, mininum_length)
         self.acidtype = acidtype
         self.acid_concentration = acid_concentration
         self.core_porosity = core_porosity
         self.rock_type = rock_type
         self.step_numbers = step_numbers
+        self.mininum_porosity = minimum_porosity
+        self.minimum_concentration = minimum_concentration
 
-    def ConvertUnits(self, core_diameter, core_length, temperature, flowrate, minimun_flowrate):
+    def ConvertUnits(self, core_diameter, core_length, temperature, flowrate, minimun_flowrate, minimum_temperature, minimum_diameter, minimum_length,):
         self.core_diameter = core_diameter / 39.37
+        self.minimum_diameter = minimum_diameter / 39.37 if minimum_diameter else None
         self.core_length = core_length / 39.37
+        self.minimum_length = minimum_length / 39.37 if minimum_length else None
         self.temperature = temperature + 273.15
+        self.minimum_temperature = minimum_temperature + 273.15 if minimum_temperature else None
         self.flowrate = (flowrate/60)*(10**(-6))
         self.mininum_flowrate = ((minimun_flowrate/60)*(10**(-6))) if minimun_flowrate else None
 
@@ -421,6 +431,175 @@ class PVBtMaster:
         for point in flowPoints:
             FlowratePoints.append( ((point*60)/(10**(-6))) )
         return PVBtPoints, FlowratePoints, intersticialVelocity, iDa, volumeToBt, timeToBt, wormholeVelocity, darcyVelocity
+    
+    def PVBtCurveAnaliticalWhiteDetailsTemp(self):
+
+        analicalPoints = np.linspace(self.minimum_temperature, self.temperature, self.step_numbers)
+        analitical = []
+        PVBtPoints = []
+        intersticialVelocity = []
+        iDa = []
+        volumeToBt = []
+        timeToBt = []
+        wormholeVelocity = []
+        darcyVelocity = []
+        for t in analicalPoints:
+            setup = PVBtSetup(
+                self.acidtype,
+                self.acid_concentration,
+                self.core_diameter,
+                self.core_length,
+                self.core_porosity,
+                self.rock_type,
+                t,
+                self.flowrate,
+            )
+            PVBtCalculator = PVBt(setup)
+            PVBtPoints.append(PVBtCalculator.PoreVolumeTobreakthroughCalculator())
+            intersticialVelocity.append(PVBtCalculator.InterticialVelocityCalculator())
+            iDa.append(PVBtCalculator.InverseDamkholerCalculator())
+            volumeToBt.append(PVBtCalculator.AcidVolumeToBtCalculator())
+            timeToBt.append(PVBtCalculator.TimeToBtCalculator())
+            wormholeVelocity.append(PVBtCalculator.WormholeVelocityCalculator())
+            darcyVelocity.append(PVBtCalculator.DarcyVelocityCalculator())
+            analitical.append(t - 273.15)
+
+        return PVBtPoints, analitical, intersticialVelocity, iDa, volumeToBt, timeToBt, wormholeVelocity, darcyVelocity
+    
+    def PVBtCurveAnaliticalWhiteDetailsPhi(self):
+
+        analicalPoints = np.linspace(self.mininum_porosity, self.core_porosity, self.step_numbers)
+        PVBtPoints = []
+        intersticialVelocity = []
+        iDa = []
+        volumeToBt = []
+        timeToBt = []
+        wormholeVelocity = []
+        darcyVelocity = []
+        for p in analicalPoints:
+            setup = PVBtSetup(
+                self.acidtype,
+                self.acid_concentration,
+                self.core_diameter,
+                self.core_length,
+                p,
+                self.rock_type,
+                self.temperature,
+                self.flowrate,
+            )
+            PVBtCalculator = PVBt(setup)
+            PVBtPoints.append(PVBtCalculator.PoreVolumeTobreakthroughCalculator())
+            intersticialVelocity.append(PVBtCalculator.InterticialVelocityCalculator())
+            iDa.append(PVBtCalculator.InverseDamkholerCalculator())
+            volumeToBt.append(PVBtCalculator.AcidVolumeToBtCalculator())
+            timeToBt.append(PVBtCalculator.TimeToBtCalculator())
+            wormholeVelocity.append(PVBtCalculator.WormholeVelocityCalculator())
+            darcyVelocity.append(PVBtCalculator.DarcyVelocityCalculator())
+
+        
+        return PVBtPoints, analicalPoints, intersticialVelocity, iDa, volumeToBt, timeToBt, wormholeVelocity, darcyVelocity
+    
+    def PVBtCurveAnaliticalWhiteDetailsLength(self):
+
+        analicalPoints = np.linspace(self.minimum_length, self.core_length, self.step_numbers)
+        analitical = []
+        PVBtPoints = []
+        intersticialVelocity = []
+        iDa = []
+        volumeToBt = []
+        timeToBt = []
+        wormholeVelocity = []
+        darcyVelocity = []
+        for p in analicalPoints:
+            setup = PVBtSetup(
+                self.acidtype,
+                self.acid_concentration,
+                self.core_diameter,
+                p,
+                self.core_porosity,
+                self.rock_type,
+                self.temperature,
+                self.flowrate,
+            )
+            PVBtCalculator = PVBt(setup)
+            PVBtPoints.append(PVBtCalculator.PoreVolumeTobreakthroughCalculator())
+            intersticialVelocity.append(PVBtCalculator.InterticialVelocityCalculator())
+            iDa.append(PVBtCalculator.InverseDamkholerCalculator())
+            volumeToBt.append(PVBtCalculator.AcidVolumeToBtCalculator())
+            timeToBt.append(PVBtCalculator.TimeToBtCalculator())
+            wormholeVelocity.append(PVBtCalculator.WormholeVelocityCalculator())
+            darcyVelocity.append(PVBtCalculator.DarcyVelocityCalculator())
+            analitical.append(p * 39.37)
+        
+        return PVBtPoints, analitical, intersticialVelocity, iDa, volumeToBt, timeToBt, wormholeVelocity, darcyVelocity
+    
+    def PVBtCurveAnaliticalWhiteDetailsDiameter(self):
+
+        analicalPoints = np.linspace(self.minimum_diameter, self.core_diameter, self.step_numbers)
+        analitical = []
+        PVBtPoints = []
+        intersticialVelocity = []
+        iDa = []
+        volumeToBt = []
+        timeToBt = []
+        wormholeVelocity = []
+        darcyVelocity = []
+        for p in analicalPoints:
+            setup = PVBtSetup(
+                self.acidtype,
+                self.acid_concentration,
+                p,
+                self.core_length,
+                self.core_porosity,
+                self.rock_type,
+                self.temperature,
+                self.flowrate,
+            )
+            PVBtCalculator = PVBt(setup)
+            PVBtPoints.append(PVBtCalculator.PoreVolumeTobreakthroughCalculator())
+            intersticialVelocity.append(PVBtCalculator.InterticialVelocityCalculator())
+            iDa.append(PVBtCalculator.InverseDamkholerCalculator())
+            volumeToBt.append(PVBtCalculator.AcidVolumeToBtCalculator())
+            timeToBt.append(PVBtCalculator.TimeToBtCalculator())
+            wormholeVelocity.append(PVBtCalculator.WormholeVelocityCalculator())
+            darcyVelocity.append(PVBtCalculator.DarcyVelocityCalculator())
+            analitical.append(p * 39.37)
+        
+        return PVBtPoints, analitical, intersticialVelocity, iDa, volumeToBt, timeToBt, wormholeVelocity, darcyVelocity
+
+    def PVBtCurveAnaliticalWhiteDetailsConcentration(self):
+
+        analicalPoints = np.linspace(self.minimum_concentration, self.acid_concentration, self.step_numbers)
+        PVBtPoints = []
+        intersticialVelocity = []
+        iDa = []
+        volumeToBt = []
+        timeToBt = []
+        wormholeVelocity = []
+        darcyVelocity = []
+        for p in analicalPoints:
+            setup = PVBtSetup(
+                self.acidtype,
+                p,
+                self.core_diameter,
+                self.core_length,
+                self.core_porosity,
+                self.rock_type,
+                self.temperature,
+                self.flowrate,
+            )
+            PVBtCalculator = PVBt(setup)
+            PVBtPoints.append(PVBtCalculator.PoreVolumeTobreakthroughCalculator())
+            intersticialVelocity.append(PVBtCalculator.InterticialVelocityCalculator())
+            iDa.append(PVBtCalculator.InverseDamkholerCalculator())
+            volumeToBt.append(PVBtCalculator.AcidVolumeToBtCalculator())
+            timeToBt.append(PVBtCalculator.TimeToBtCalculator())
+            wormholeVelocity.append(PVBtCalculator.WormholeVelocityCalculator())
+            darcyVelocity.append(PVBtCalculator.DarcyVelocityCalculator())
+
+        
+        return PVBtPoints, analicalPoints, intersticialVelocity, iDa, volumeToBt, timeToBt, wormholeVelocity, darcyVelocity
+    
 
 
 
