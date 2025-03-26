@@ -48,6 +48,7 @@ def get_correct_param(data: AnalicalInput):
                 )
                 pvbt, temperature, velocity, ida, volumetobt, timetobt, wormhole, darcy = master.PVBtCurveAnaliticalWhiteDetailsTemp()
                 return {
+                    "analyzed":"temperature",
                     "pvbtpoints": pvbt, 
                     "analiticalpoints": temperature,
                     "insterticialvelocity":velocity,
@@ -73,6 +74,7 @@ def get_correct_param(data: AnalicalInput):
                 )
                 pvbt, analitical, velocity, ida, volumetobt, timetobt, wormhole, darcy = master.PVBtCurveAnaliticalWhiteDetailsLength()
                 return {
+                    "analyzed":"Length",
                     "pvbtpoints": pvbt, 
                     "analiticalpoints": analitical,
                     "insterticialvelocity":velocity,
@@ -97,6 +99,7 @@ def get_correct_param(data: AnalicalInput):
                 )
                 pvbt, analitical, velocity, ida, volumetobt, timetobt, wormhole, darcy = master.PVBtCurveAnaliticalWhiteDetailsPhi()
                 return {
+                    "analyzed":"Porosity",
                     "pvbtpoints": pvbt, 
                     "analiticalpoints": analitical,
                     "insterticialvelocity":velocity,
@@ -121,6 +124,7 @@ def get_correct_param(data: AnalicalInput):
                 )
                 pvbt, analitical, velocity, ida, volumetobt, timetobt, wormhole, darcy = master.PVBtCurveAnaliticalWhiteDetailsLength()
                 return {
+                    "analyzed":"Diameter",
                     "pvbtpoints": pvbt, 
                     "analiticalpoints": analitical,
                     "insterticialvelocity":velocity,
@@ -145,6 +149,7 @@ def get_correct_param(data: AnalicalInput):
                 )
                 pvbt, analitical, velocity, ida, volumetobt, timetobt, wormhole, darcy = master.PVBtCurveAnaliticalWhiteDetailsConcentration()
                 return {
+                    "analyzed":"Acid Concentration",
                     "pvbtpoints": pvbt, 
                     "analiticalpoints": analitical,
                     "insterticialvelocity":velocity,

@@ -49,6 +49,7 @@ class PVBtOutputCurveWhithDetails(BaseModel):
     darcyvelocity: List[float]
 
 class PVBtOutputAnalitical(BaseModel):
+    analyzed:str
     pvbtpoints: List[float]
     analiticalpoints: List[float]
     insterticialvelocity: List[float]
