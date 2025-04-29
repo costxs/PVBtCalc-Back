@@ -23,10 +23,15 @@ HARDCODED_USERS = {
         "username":"Daniel Nobre",
         "hashad_password": pwd_context.hash('DanielPvbt')
     },
-    "tcc@pescador":{
-        "username":"temporário",
-        "hashad_password": pwd_context.hash('pvbtcalcweb')
+    "total@pvbt":{
+        "username":"Total Energies",
+        "hashad_password":pwd_context.hash('pvbtcalc2025')
+    },
+    "petrobras@pvbt":{
+        "username":"Petrobras",
+        "hashad_password":pwd_context.hash('pvbtcalc2025')
     }
+
 }
 
 def verify_user_password(plain_password: str, email: str) -> bool:
