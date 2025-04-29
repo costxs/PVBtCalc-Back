@@ -24,7 +24,7 @@ HARDCODED_USERS = {
         "hashad_password": pwd_context.hash('DanielPvbt')
     },
     "total@pvbt":{
-        "username":"Total Energies",
+        "username":"TotalEnergies",
         "hashad_password":pwd_context.hash('pvbtcalc2025')
     },
     "petrobras@pvbt":{
