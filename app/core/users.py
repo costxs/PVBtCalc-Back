@@ -36,7 +36,7 @@ HARDCODED_USERS = {
         "hashad_password":pwd_context.hash('pvbtcalc2025')
     },
     "visiting@pvbt":{
-        "username":"Convidado",
+        "username":"guest",
         "hashad_password":pwd_context.hash('pvbtcalc2026')
     }
 
