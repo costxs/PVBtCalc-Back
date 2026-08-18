@@ -6,5 +6,5 @@ from app.services.tools import get_correct_param
 router = APIRouter()
 
 @router.post("/pvbtanalitical", response_model=PVBtOutputAnalitical)
-def calculate_pvbt(data: AnalicalInput, current_user:dict = Depends(get_current_user)):
+def calculate_pvbt(data: AnalicalInput):
     return get_correct_param(data)

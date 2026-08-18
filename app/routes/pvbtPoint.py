@@ -5,7 +5,7 @@ from app.core.security import get_current_user
 router = APIRouter()
 
 @router.post("/pvbtpoint", response_model=PVBtOutputPoint)
-def calculate_pvbt(data: PVBtInputPoint, current_user:dict = Depends(get_current_user)):
+def calculate_pvbt(data: PVBtInputPoint):
     master = PVBtMaster(
         acidtype=AcidType.getAcidTypeByStr(data.acid_type),
         acid_concentration=data.acid_concentration,
