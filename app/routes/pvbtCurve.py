@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from app.schemas import PVBtInputCurve, PVBtOutputCurveWhithDetails
 from app.services.PVBTfunc import AcidType, PVBtMaster
+from app.services.linear_validity import linear_validity_window
 from app.core.security import get_current_user
 router = APIRouter()
 
@@ -18,16 +19,35 @@ def calculate_pvbt(data: PVBtInputCurve):
         minimun_flowrate=data.minimum_flowrate,
         step_numbers=data.step_numbers,
     )
-    pvbt, flowrates, velocity, ida, volumetobt, timetobt, wormhole, darcy = master.PVBtCurveCalculatorWhiteDetails()
-    
-    
+    pvbt, flowrates, velocity, ida, volumetobt, timetobt, wormhole, darcy, status = master.PVBtCurveCalculatorWhiteDetails()
+
+    # Fase 6.3/6.4: janela de validade da vazao. Logica isolada em
+    # app.services.linear_validity; os escalares saem de um PVBtSetup ja
+    # montado (master.getSetup) -- nenhum recalculo novo dentro de PVBTfunc.
+    setup = master.getSetup()
+    within_validity_range, validity_metadata = linear_validity_window(
+        flowrates,
+        a=setup.acidsetup.a,
+        b=setup.acidsetup.b,
+        n=setup.acidsetup.n,
+        keff=setup.acidsetup.k0 * setup.difisioncoefficient,
+        A_o=setup.injectionfacecross,
+        lc=setup.core_geometry.dimensionless_length,
+        phi=setup.core_geometry.core_porosity,
+        C_Ao=setup.acidsetup.acid_concentration,
+        X=setup.acid_volumetric_dissolving_power100,
+    )
+
     return {
-        "pvbtpoints": pvbt, 
+        "pvbtpoints": pvbt,
         "flowratepoints": flowrates,
         "insterticialvelocity":velocity,
         "ida":ida,
         "volumetobt":volumetobt,
         "timetobt":timetobt,
         "wormholevelocity":wormhole,
-        "darcyvelocity":darcy
+        "darcyvelocity":darcy,
+        "status": status,
+        "within_validity_range": within_validity_range,
+        "metadata": validity_metadata,
         }

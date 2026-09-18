@@ -3,3 +3,7 @@ __pycache__/
 .env
 *.pyc
 migrations/
+diag*.py
+test_design_dump.py
+test_ratio.py
+.pytest_cache/

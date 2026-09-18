@@ -53,17 +53,24 @@ class HCLemulsified(AcidSetup):
 
 class AcidType:
     HCl = HCLwithout
-    HClWithInibthorCorrosion = HCLwith
+    HClWithInhibitorCorrosion = HCLwith
     HClEmulsified = HCLemulsified
 
     @staticmethod
     def getAcidTypeByStr(acid_type: str):
         acid_types = {
-            "HCl": AcidType.HCl,
-            "HCl With Inibithor Corrosion": AcidType.HClWithInibthorCorrosion,
-            "HCl Emulsified": AcidType.HClEmulsified,
+            "hcl": AcidType.HCl,
+            "hcl with inhibitor corrosion": AcidType.HClWithInhibitorCorrosion,
+            "hcl emulsified": AcidType.HClEmulsified,
         }
-        return acid_types.get(acid_type)
+        if not isinstance(acid_type, str):
+            raise ValueError(f"acid_type must be a string, got {type(acid_type)}: {acid_type}")
+        
+        normalized = acid_type.strip().lower()
+        cls = acid_types.get(normalized)
+        if cls is None:
+            raise ValueError(f"Unknown acid type received from frontend: '{acid_type}'")
+        return cls
 
 
 
@@ -255,12 +262,31 @@ class PVBt:
         lamb = self.PVBtSetup.core_geometry.dimensionless_length
         X = self.PVBtSetup.acid_volumetric_dissolving_power100
         diV = self.dimensionless_velocity
-        self.pore_volume_to_breaktrhrough = ff * (1-phi) * (np.exp(Dn*lamb)-1) / (phi*lamb*Ca0*X*diV*Dn)
+        
+        exp_term = Dn * lamb
+        if exp_term > 700:
+            self.pore_volume_to_breaktrhrough = None
+            return None
+            
+        self.pore_volume_to_breaktrhrough = ff * (1-phi) * (np.exp(exp_term)-1) / (phi*lamb*Ca0*X*diV*Dn)
         return  self.pore_volume_to_breaktrhrough
     
     def AcidVolumeToBtCalculator(self):
         # Acid volume to BT unity (cm^3)
+        # BACKLOG (2026-09-10, achado ao investigar o bug do tbt radial):
+        # PVBt e "pore volumes to breakthrough" -- deveria escalar pelo
+        # VOLUME POROSO (phi*Ao*l), nao por Ca0*Ao*l. Isso deixa
+        # acid_volume_to_bt inconsistente com TimeToBtCalculator: por
+        # construcao TimeToBtCalculator ja e igual a V_A/q (diferenca de
+        # ~1e-16, o phi cancela na derivacao), entao o erro certo esta
+        # AQUI, nao no tbt -- usar Ca0 em vez de phi so passa despercebido
+        # no caso padrao onde phi=Ca0=0.15. Decisao do usuario: nao mexer
+        # agora, so registrar. Ver o achado completo na sessao que
+        # adicionou este comentario antes de corrigir.
         PVBt = self.pore_volume_to_breaktrhrough
+        if PVBt is None:
+            self.acid_volume_to_bt = None
+            return None
         Ca0 = self.PVBtSetup.acidsetup.acid_concentration
         Ao = self.PVBtSetup.injectionfacecross
         l = self.PVBtSetup.core_geometry.core_length
@@ -275,7 +301,13 @@ class PVBt:
         Ca0 = self.PVBtSetup.acidsetup.acid_concentration
         X = self.PVBtSetup.acid_volumetric_dissolving_power100
         keff = self.keff
-        self.time_to_bt = ff * (1-phi)*(np.exp(Dn*lamb)-1) / (Ca0*X*keff)
+        
+        exp_term = Dn * lamb
+        if exp_term > 700:
+            self.time_to_bt = None
+            return None
+            
+        self.time_to_bt = ff * (1-phi)*(np.exp(exp_term)-1) / (Ca0*X*keff)
         return self.time_to_bt
 
 
@@ -311,13 +343,13 @@ class PVBtMaster:
 
     def ConvertUnits(self, core_diameter, core_length, temperature, flowrate, minimun_flowrate, minimum_temperature, minimum_diameter, minimum_length,):
         self.core_diameter = core_diameter / 39.37
-        self.minimum_diameter = minimum_diameter / 39.37 if minimum_diameter else None
+        self.minimum_diameter = minimum_diameter / 39.37 if minimum_diameter is not None else None
         self.core_length = core_length / 39.37
-        self.minimum_length = minimum_length / 39.37 if minimum_length else None
+        self.minimum_length = minimum_length / 39.37 if minimum_length is not None else None
         self.temperature = temperature + 273.15
-        self.minimum_temperature = minimum_temperature + 273.15 if minimum_temperature else None
+        self.minimum_temperature = minimum_temperature + 273.15 if minimum_temperature is not None else None
         self.flowrate = (flowrate/60)*(10**(-6))
-        self.mininum_flowrate = ((minimun_flowrate/60)*(10**(-6))) if minimun_flowrate else None
+        self.mininum_flowrate = ((minimun_flowrate/60)*(10**(-6))) if minimun_flowrate is not None else None
 
     def PVBtPointCalculator(self):
         setup = PVBtSetup(
@@ -379,6 +411,7 @@ class PVBtMaster:
         flowPoints = np.linspace(self.mininum_flowrate, self.flowrate, self.step_numbers)
         FlowratePoints = []
         PVBtPoints = []
+        StatusPoints = []
         for q in flowPoints:
             setup = PVBtSetup(
                 self.acidtype,
@@ -391,11 +424,17 @@ class PVBtMaster:
                 q,
             )
             PVBtCalculator = PVBt(setup)
-            PVBtPoints.append(PVBtCalculator.PoreVolumeTobreakthroughCalculator())
+            pvbt_point = PVBtCalculator.PoreVolumeTobreakthroughCalculator()
+            PVBtPoints.append(pvbt_point)
+            # Fase 6.2: rotula o corte que JA acontece hoje (exp_term > 700 ->
+            # None em PoreVolumeTobreakthroughCalculator). Nao muda o limiar
+            # nem o valor calculado -- so nomeia. "clipped" == mesmo sentido
+            # que o Radial ja usa (PVBTradialFunc._build_single_curve).
+            StatusPoints.append("clipped" if pvbt_point is None else "ok")
 
         for point in flowPoints:
             FlowratePoints.append( ((point*60)/(10**(-6))) )
-        return PVBtPoints, FlowratePoints
+        return PVBtPoints, FlowratePoints, StatusPoints
     
     def PVBtCurveCalculatorWhiteDetails(self):
 
@@ -408,6 +447,7 @@ class PVBtMaster:
         timeToBt = []
         wormholeVelocity = []
         darcyVelocity = []
+        StatusPoints = []
         for q in flowPoints:
             setup = PVBtSetup(
                 self.acidtype,
@@ -420,18 +460,23 @@ class PVBtMaster:
                 q,
             )
             PVBtCalculator = PVBt(setup)
-            PVBtPoints.append(PVBtCalculator.PoreVolumeTobreakthroughCalculator())
+            pvbt_point = PVBtCalculator.PoreVolumeTobreakthroughCalculator()
+            PVBtPoints.append(pvbt_point)
             intersticialVelocity.append(PVBtCalculator.InterticialVelocityCalculator())
             iDa.append(PVBtCalculator.InverseDamkholerCalculator())
             volumeToBt.append(PVBtCalculator.AcidVolumeToBtCalculator())
             timeToBt.append(PVBtCalculator.TimeToBtCalculator())
             wormholeVelocity.append(PVBtCalculator.WormholeVelocityCalculator())
             darcyVelocity.append(PVBtCalculator.DarcyVelocityCalculator())
+            # Fase 6.2: mesmo rotulo do PVBtCurveCalculator acima -- volumeToBt
+            # e timeToBt tambem saem None nestes mesmos indices (cascateiam de
+            # pvbt None), entao PVBt e a fonte unica do status do ponto.
+            StatusPoints.append("clipped" if pvbt_point is None else "ok")
 
         for point in flowPoints:
             FlowratePoints.append( ((point*60)/(10**(-6))) )
-        return PVBtPoints, FlowratePoints, intersticialVelocity, iDa, volumeToBt, timeToBt, wormholeVelocity, darcyVelocity
-    
+        return PVBtPoints, FlowratePoints, intersticialVelocity, iDa, volumeToBt, timeToBt, wormholeVelocity, darcyVelocity, StatusPoints
+
     def PVBtCurveAnaliticalWhiteDetailsTemp(self):
 
         analicalPoints = np.linspace(self.minimum_temperature, self.temperature, self.step_numbers)
