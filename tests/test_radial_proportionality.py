@@ -147,14 +147,31 @@ def test_design_plot_proportionality():
     master_ind = RadialCurveMaster(rock_type="Indiana Limestone", **params)
     master_edw = RadialCurveMaster(rock_type="Edwards White", **params)
 
-    dp_ind = master_ind.generate_design_plot([297.0, 338.0], 1e-5, 0.1, max_length_ft=15.0, steps=10)
-    dp_edw = master_edw.generate_design_plot([297.0, 338.0], 1e-5, 0.1, max_length_ft=15.0, steps=10)
+    dp_ind = master_ind.generate_design_plot([297.0, 338.0], 1e-5, 0.1, "length", [15.0], steps=10)
+    dp_edw = master_edw.generate_design_plot([297.0, 338.0], 1e-5, 0.1, "length", [15.0], steps=10)
 
+    # As series de Indiana e Edwards White tem comprimentos DIFERENTES de proposito:
+    # o teto de 1000 gal/ft e fixo e o volume de Edwards e 0.52x o de Indiana no
+    # mesmo comprimento, entao Edwards so atinge o teto mais tarde (297 K: Indiana
+    # para em 11.92 ft com 1000 gal/ft, Edwards esta em 520 e segue ate 13.10 ft).
+    # A 338 K ambas param bem antes: temperatura maior aumenta o consumo de acido.
+    # Por isso NAO se exige igualdade de tamanho; compara-se o prefixo comum, e o
+    # piso abaixo impede que uma serie encurtada por regressao passe despercebida
+    # (zip nao tem piso: com 2 pontos, compararia 2 pontos e ficaria verde).
+    min_points = {297.0: 47, 338.0: 21}  # prefixo comum medido em 2026-09-18
+
+    assert len(dp_ind["series"]) == len(dp_edw["series"]) == len(min_points)
     for si, se in zip(dp_ind["series"], dp_edw["series"]):
+        floor = min_points[si["temperature_k"]]
+        assert se["temperature_k"] == si["temperature_k"]
+
         rates_i = [p[0] for p in si["optimum_rate_series"]]
         rates_e = [p[0] for p in se["optimum_rate_series"]]
         vols_i = [p[0] for p in si["optimum_volume_series"]]
         vols_e = [p[0] for p in se["optimum_volume_series"]]
+
+        assert min(len(rates_i), len(rates_e)) >= floor, "Serie de vazao otima encurtou abaixo do piso"
+        assert min(len(vols_i), len(vols_e)) >= floor, "Serie de volume otimo encurtou abaixo do piso"
 
         for ri, re in zip(rates_i, rates_e):
             assert np.isclose(ri, re, rtol=1e-4), "Optimum rate no design plot deve ser identico"
