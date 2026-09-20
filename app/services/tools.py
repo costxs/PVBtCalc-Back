@@ -36,7 +36,6 @@ from app.services.units import flowrate_to_m3s
 import numpy as np
 
 def get_correct_param(data: AnalicalInput):
-    # Map parameter names to object attributes
     attr_map = {
         'temperature': 'temperature',
         'core length': 'payzone_thickness_ft' if data.flow_regime == 'radial' else 'core_length',
@@ -69,13 +68,10 @@ def get_correct_param(data: AnalicalInput):
     for val in sweep_values:
         setattr(data, attr_name, val)
         
-        # O backend formata o eixo X apropriadamente.
         if sweep_param == 'temperature' and data.flow_regime != 'radial':
-            # PVBtCurveAnaliticalWhiteDetailsTemp subtraía 273.15, 
-            # mas vamos manter o valor para garantir conformidade
             analiticalpoints.append(val)
         elif sweep_param == 'core length' and data.flow_regime != 'radial':
-            analiticalpoints.append(val * 39.37) # mantendo compatibilidade de polegada para linear
+            analiticalpoints.append(val * 39.37)
         elif sweep_param == 'core diameter' and data.flow_regime != 'radial':
             analiticalpoints.append(val * 39.37)
         else:
@@ -160,7 +156,6 @@ def get_correct_param(data: AnalicalInput):
     }
 
 def generate_skin_evolution(data: AnalicalInput, flowrates_to_compare: List[float]):
-    # Note: data could be SkinEvolutionInput, but we can reuse AnalicalInput structure
     import math
     from app.services.PVBTfunc import AcidType
     
@@ -179,7 +174,6 @@ def generate_skin_evolution(data: AnalicalInput, flowrates_to_compare: List[floa
 
     r_w_ft = data.wellbore_radius_in / 12.0
     
-    # Varredura do comprimento do wormhole (0.1 a 20 ft) - 50 pontos
     comprimentos_ft = np.linspace(0.1, 20.0, 50)
     
     resultados_por_vazao = {}
@@ -203,13 +197,9 @@ def generate_skin_evolution(data: AnalicalInput, flowrates_to_compare: List[floa
 
         curva_q = []
         for l_ft in comprimentos_ft:
-            # Converte l_ft para lambda adimensional 
-            # (L = 1.0 m no modelo PVBtRadial padrao, que e 3.28084 ft)
             L_char_ft = geo.L * 3.28084 
             lam = l_ft / L_char_ft
             
-            # Calcula o Volume de acido usando a Eq 42. Retorna m^3/m. Multiplica para gal/ft.
-            # is_clipped check is necessary since lam can be large.
             expoente = modelo_radial.K * modelo_radial.alpha(lam)
             if expoente > PVBtRadial.LIMITE_EXP:
                 v_acid_gal_ft = None
@@ -221,12 +211,8 @@ def generate_skin_evolution(data: AnalicalInput, flowrates_to_compare: List[floa
                 print(f"Volume m3: {v_acid_m3}")
                 v_acid_gal_ft = (v_acid_m3 * 264.172) / h_ft
             
-            # Calcula o Skin equivalente
             skin = -math.log((r_w_ft + l_ft) / r_w_ft)
 
-            # l_ft (Fase 8): a tabela do frontend precisa do comprimento por
-            # ponto -- sem isso, so daria pra reconstruir invertendo a formula
-            # do skin acima (l = r_w*(exp(-skin)-1)), duplicando-a no front.
             curva_q.append({"x": v_acid_gal_ft, "y": skin, "l_ft": l_ft})
             
         resultados_por_vazao[str(q)] = curva_q

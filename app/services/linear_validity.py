@@ -53,8 +53,6 @@ def linear_validity_window(flowrates_cm3_min, a, b, n, keff, A_o, lc, phi, C_Ao,
     try:
         q_opt_m3s = optimum_flowrate_linear(a, b, n, keff, A_o, lc, phi, C_Ao, X)
     except (ValueError, RuntimeError):
-        # brentq sem troca de sinal no bracket (ou falha de convergencia):
-        # curva sem minimo interior fisico neste intervalo -> degrada.
         return [True] * len(flowrates_cm3_min), None
 
     q_opt_cm3_min = m3s_to_flowrate(q_opt_m3s, "cm3_min")

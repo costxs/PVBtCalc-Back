@@ -15,9 +15,9 @@ engano o fator de cm3/min sobre um numero em bbl/min (q_o ~1.59e5x menor,
 K estourando exp() e status "clipped" em vazoes normais).
 """
 
-CM3_MIN_TO_M3S = 1e-6 / 60.0        # 1 cm^3/min -> m^3/s
-BBL_TO_M3 = 0.158987294928         # 1 oil barrel (42 US gal) em m^3
-BBL_MIN_TO_M3S = BBL_TO_M3 / 60.0  # 1 bbl/min -> m^3/s
+CM3_MIN_TO_M3S = 1e-6 / 60.0
+BBL_TO_M3 = 0.158987294928
+BBL_MIN_TO_M3S = BBL_TO_M3 / 60.0
 
 _TO_M3S = {
     "cm3_min": CM3_MIN_TO_M3S,
@@ -44,7 +44,7 @@ def m3s_to_flowrate(value, unit):
     return value / _factor(unit)
 
 
-BBL_TO_GAL = 42.0  # 1 oil barrel = 42 US gal, EXATO (nao passa por m3)
+BBL_TO_GAL = 42.0
 
 
 def flowrate_to_display(value_bbl_min, payzone_thickness_ft):

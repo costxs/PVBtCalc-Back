@@ -54,19 +54,15 @@ from app.services.PVBTradialFunc import (  # noqa: E402
 )
 from app.services.PVBTfunc import AcidType  # noqa: E402
 
-# V_A de referencia: caminho da temperatura com as formulas empiricas
-# puras avaliadas em 297.20 K (ver docstring do modulo).
 EXPECTED_VA = 7.746136919479e-02
 LAM = 2.0
 Q_M3S = 1e-5
 CONC = 0.15
-TEMP_K = 297.20  # o que a UI/API manda: ja em Kelvin
+TEMP_K = 297.20
 
-# geometria do Apendice A radial (identica ao __main__ de PVBTradialFunc):
-# r_w = 3 in = 0.0762 m ; h_o = 1 ft = 0.3048 m ; phi = 0.15
 GEO_KWARGS = dict(r_w_m=0.0762, h_o_m=0.3048, porosity=0.15)
-WELLBORE_RADIUS_IN = 0.0762 / 0.0254   # = 3.0
-PAYZONE_THICKNESS_FT = 0.3048 / 0.3048  # = 1.0
+WELLBORE_RADIUS_IN = 0.0762 / 0.0254
+PAYZONE_THICKNESS_FT = 0.3048 / 0.3048
 ACID_SYSTEM = "HCl With Inhibitor Corrosion"
 
 
@@ -93,7 +89,7 @@ def _va_production(temp_k: float) -> float:
     master = RadialCurveMaster(
         acid_type_cls=AcidType.getAcidTypeByStr(ACID_SYSTEM),
         acid_concentration=CONC,
-        rock_type="__sentinel_no_rock__",   # fora de ROCKFLOWFRACTION -> f = 1.0
+        rock_type="__sentinel_no_rock__",
         porosity=GEO_KWARGS["porosity"],
         temperature_k=temp_k,
         wellbore_radius_in=WELLBORE_RADIUS_IN,
@@ -134,7 +130,6 @@ def test_rounded_paper_constants_are_a_different_number():
     v_rounded = m.acid_volume(LAM)
     print(f"[rounded]     V_A(Dm=3.24e-9, X=0.5417) = {v_rounded:.12e}")
     assert abs(v_rounded - 7.7678156513e-02) / 7.7678156513e-02 < 1e-9
-    # e e mensuravelmente diferente do valor pelas formulas puras
     assert abs(v_rounded - EXPECTED_VA) / EXPECTED_VA > 1e-3
 
 

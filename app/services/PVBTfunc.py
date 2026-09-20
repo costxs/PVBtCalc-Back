@@ -73,7 +73,6 @@ class AcidType:
         return cls
 
 
-
 class CoreGeometry:
     """
     :param core_diamater: m (meter)
@@ -153,8 +152,7 @@ class PVBtSetup:
                 self.flowfraction = value
 
     def SetAcidDensity(self):
-        #acid density unity (g/cm3)
-        t = self.temperature - 273.15 #celsius temperature
+        t = self.temperature - 273.15
         Ca0 = self.acidsetup.acid_concentration
         self.acid_density = 1.00683961828436 + 0.00507208224518196*Ca0*100 -0.00050572878832986*t
 
@@ -164,9 +162,9 @@ class PVBtSetup:
         """
         Ca0 = self.acidsetup.acid_concentration
         vm = 1
-        MWm = 100.1 #for CaCO3
+        MWm = 100.1
         va = 2
-        MWa = 36.5 #for HCl
+        MWa = 36.5
         self.acid_gravimetric_dissolving_power = Ca0 * ((vm*MWm)/(va*MWa))
 
     def SetAcidVolumetricDissolvingPower(self):
@@ -175,12 +173,11 @@ class PVBtSetup:
         rom unity (lb/ft3)
         """
         beta = self.acid_gravimetric_dissolving_power
-        roa = self.acid_density * 62.428 # convert acid density by g/cm3 to lbm/ft3
-        rom = 169 # CaCO3 density in lbm/ft3
+        roa = self.acid_density * 62.428
+        rom = 169
         self.acid_volumetric_dissolving_power = beta * (roa/rom)
     
     def SetAcidVolumetricDissolvingPower100(self):
-        # Acid Volumetric Dissolving Power at HCl 100%
         Xp = self.acid_volumetric_dissolving_power
         Ca0 = self.acidsetup.acid_concentration
         self.acid_volumetric_dissolving_power100 = Xp/Ca0
@@ -200,7 +197,6 @@ class PVBt:
         self.TimeToBtCalculator()
 
     def InterticialVelocityCalculator(self):
-        # Interticial Velocity unity (m/s)
         q0 = self.PVBtSetup.flowrate
         Ao = self.PVBtSetup.injectionfacecross
         phi = self.PVBtSetup.core_geometry.core_porosity
@@ -208,14 +204,12 @@ class PVBt:
         return self.interticial_velocity
     
     def DarcyVelocityCalculator(self):
-        # Darcy velocity unity (m/s)
         q0 = self.PVBtSetup.flowrate
         Ao = self.PVBtSetup.injectionfacecross
         self.darcy_velocity = q0/Ao
         return self.darcy_velocity
     
     def WormholeVelocityCalculator(self):
-        # Velocity in the wormhole unity (m/s)
         Dv = self.darcy_velocity
         a = self.PVBtSetup.acidsetup.a
         Ao = self.PVBtSetup.injectionfacecross
@@ -225,7 +219,6 @@ class PVBt:
         return self.wormhole_velocity
     
     def DamkholerNumberCalculator(self):
-        # Damkholer number unity (dimensionless)
         k0 = self.PVBtSetup.acidsetup.k0
         Dm = self.PVBtSetup.difisioncoefficient
         L = self.PVBtSetup.core_geometry.characteristic_length
@@ -234,27 +227,23 @@ class PVBt:
         return self.damkholer_number
     
     def KeffCalculator(self):
-        # Keff unity (need to investigate)
         k0 = self.PVBtSetup.acidsetup.k0
         Dm = self.PVBtSetup.difisioncoefficient
         self.keff = k0*Dm
         return self.keff
     
     def InverseDamkholerCalculator(self):
-        # inverse damkholer number unity (dimensionless)
         Dn = self.damkholer_number
         self.inverse_damkholer_number = 1/Dn
         return self.inverse_damkholer_number
     
     def DimensionlessVelocityCalculator(self):
-        # dimensionless velocity unity (dimensionless)
         Wv = self.wormhole_velocity
         Dv = self.darcy_velocity
         self.dimensionless_velocity = Wv/Dv
         return self.dimensionless_velocity
     
     def PoreVolumeTobreakthroughCalculator(self):
-        # Pore Volume to Breakthrough unity (dimensionless)
         ff = self.PVBtSetup.flowfraction
         phi = self.PVBtSetup.core_geometry.core_porosity
         Dn = self.damkholer_number
@@ -272,17 +261,6 @@ class PVBt:
         return  self.pore_volume_to_breaktrhrough
     
     def AcidVolumeToBtCalculator(self):
-        # Acid volume to BT unity (cm^3)
-        # BACKLOG (2026-09-10, achado ao investigar o bug do tbt radial):
-        # PVBt e "pore volumes to breakthrough" -- deveria escalar pelo
-        # VOLUME POROSO (phi*Ao*l), nao por Ca0*Ao*l. Isso deixa
-        # acid_volume_to_bt inconsistente com TimeToBtCalculator: por
-        # construcao TimeToBtCalculator ja e igual a V_A/q (diferenca de
-        # ~1e-16, o phi cancela na derivacao), entao o erro certo esta
-        # AQUI, nao no tbt -- usar Ca0 em vez de phi so passa despercebido
-        # no caso padrao onde phi=Ca0=0.15. Decisao do usuario: nao mexer
-        # agora, so registrar. Ver o achado completo na sessao que
-        # adicionou este comentario antes de corrigir.
         PVBt = self.pore_volume_to_breaktrhrough
         if PVBt is None:
             self.acid_volume_to_bt = None
@@ -309,7 +287,6 @@ class PVBt:
             
         self.time_to_bt = ff * (1-phi)*(np.exp(exp_term)-1) / (Ca0*X*keff)
         return self.time_to_bt
-
 
 
 class PVBtMaster:
@@ -426,10 +403,6 @@ class PVBtMaster:
             PVBtCalculator = PVBt(setup)
             pvbt_point = PVBtCalculator.PoreVolumeTobreakthroughCalculator()
             PVBtPoints.append(pvbt_point)
-            # Fase 6.2: rotula o corte que JA acontece hoje (exp_term > 700 ->
-            # None em PoreVolumeTobreakthroughCalculator). Nao muda o limiar
-            # nem o valor calculado -- so nomeia. "clipped" == mesmo sentido
-            # que o Radial ja usa (PVBTradialFunc._build_single_curve).
             StatusPoints.append("clipped" if pvbt_point is None else "ok")
 
         for point in flowPoints:
@@ -468,9 +441,6 @@ class PVBtMaster:
             timeToBt.append(PVBtCalculator.TimeToBtCalculator())
             wormholeVelocity.append(PVBtCalculator.WormholeVelocityCalculator())
             darcyVelocity.append(PVBtCalculator.DarcyVelocityCalculator())
-            # Fase 6.2: mesmo rotulo do PVBtCurveCalculator acima -- volumeToBt
-            # e timeToBt tambem saem None nestes mesmos indices (cascateiam de
-            # pvbt None), entao PVBt e a fonte unica do status do ponto.
             StatusPoints.append("clipped" if pvbt_point is None else "ok")
 
         for point in flowPoints:
@@ -645,6 +615,5 @@ class PVBtMaster:
         
         return PVBtPoints, analicalPoints, intersticialVelocity, iDa, volumeToBt, timeToBt, wormholeVelocity, darcyVelocity
     
-
 
 

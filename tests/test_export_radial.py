@@ -61,8 +61,6 @@ DESIGN_TEMPS = [297.04, 338.71, 422.04]
 SKIN_FLOWS = [0.8, 1.6, 3.2]
 
 MM_PER_INCH = 25.4
-# bbox_inches="tight" recorta margem: aceita ate ~10% menor que o nominal,
-# nunca maior (senao a figura nao caberia na coluna da revista).
 SIZE_TOLERANCE = 0.10
 
 
@@ -136,8 +134,6 @@ def export_request(curve_output, design_output, skin_output) -> RadialExportRequ
     )
 
 
-# --- Workbook ----------------------------------------------------------
-
 def test_workbook_sheet_order_and_names(export_request):
     import openpyxl
     xlsx_bytes = ewb.build_workbook(export_request)
@@ -187,7 +183,6 @@ def test_workbook_one_image_per_data_sheet_plus_summary(export_request):
     xlsx_bytes = ewb.build_workbook(export_request)
     z = zipfile.ZipFile(io.BytesIO(xlsx_bytes))
     media = [n for n in z.namelist() if n.startswith("xl/media/")]
-    # 10 abas de dados (3 design + 4 sim + 3 skin) + 3 combinadas no resumo
     assert len(media) == 10 + 3
 
 
@@ -195,7 +190,7 @@ DRAWING_NS = {
     "xdr": "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing",
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
 }
-EMU_PER_PX = 9525  # unidade nativa do OOXML pra drawings; 9525 EMU = 1 px a 96 dpi
+EMU_PER_PX = 9525
 
 
 def test_workbook_image_display_width_and_summary_no_overlap(export_request):
@@ -209,7 +204,7 @@ def test_workbook_image_display_width_and_summary_no_overlap(export_request):
     z = zipfile.ZipFile(io.BytesIO(xlsx_bytes))
 
     data_sheet_widths_px = []
-    resumo_boxes = []  # (y_emu, cy_emu, cx_emu) pra checar largura e sobreposicao
+    resumo_boxes = []
 
     for name in z.namelist():
         if not (name.startswith("xl/drawings/") and name.endswith(".xml")):
@@ -304,8 +299,6 @@ def test_workbook_figure_titles_replace_filename_with_formatted_bar(export_reque
         img = ws._images[0]
         img_row0, img_col0 = img.anchor._from.row, img.anchor._from.col
 
-        # titulo na linha IMEDIATAMENTE acima da imagem (0-indexed img_row0
-        # == 1-indexed excel row do titulo); imagem ancorada na linha seguinte.
         title_row, title_col = img_row0, img_col0 + 1
         cell = ws.cell(row=title_row, column=title_col)
         assert cell.value == expected_text
@@ -340,7 +333,7 @@ def test_workbook_design_plot_multi_target_highlights(export_request):
 
     ws297 = wb["Design 297 K"]
     notes_297 = [c.value for c in ws297["F"][1:] if c.value]
-    assert len(notes_297) == 4  # todos os 4 alvos atingidos, um por linha
+    assert len(notes_297) == 4
 
     ws339 = wb["Design 339 K"]
     notes_339 = [c.value for c in ws339["F"][1:] if c.value]
@@ -365,8 +358,6 @@ def test_workbook_values_match_source_curves(export_request):
         assert ws.cell(row=row, column=1).value == pytest.approx(curve.flowratepoints[i])
         assert ws.cell(row=row, column=2).value == pytest.approx(curve.acidvolumepoints[i])
 
-
-# --- Figures zip ---------------------------------------------------------
 
 EXPECTED_STEMS = {
     "simulation_5.00ft", "simulation_10.00ft", "simulation_15.00ft", "simulation_20.00ft", "simulation_all",
@@ -403,19 +394,9 @@ def test_figures_zip_contents_dpi_and_size(export_request, size, expected_mm):
 
 
 def test_font_falls_back_safely():
-    assert ep.FONT_FAMILY  # nunca vazio -- sempre resolve pra algo (DejaVu Sans no pior caso)
+    assert ep.FONT_FAMILY
 
 
-# --- Flowing Fraction (f) -------------------------------------------------
-# Bug real (2026-09-18): a celula "Flowing Fraction (f)" na aba Inputs
-# sempre mostrava "nao disponivel", pra QUALQUER rock_type -- self.f
-# (RadialCurveMaster.__init__, PVBTradialFunc.py) era calculado e usado em
-# _integral_fechada, mas get_adjusted_parameters() nunca o devolvia, e o
-# frontend lia de curve.metadata (janela de validade, RadialCurveValidity),
-# que nunca teve essa chave. Um teste so de "o campo existe" passaria com
-# f=1.0 chumbado (o default de ROCKFLOWFRACTION.get); por isso comparamos
-# DOIS rocks com fracoes diferentes e conferimos que os valores batem com a
-# tabela (PVBTfunc.ROCKFLOWFRACTION) e sao DIFERENTES entre si.
 from app.services.PVBTfunc import ROCKFLOWFRACTION
 
 FF_ROCKS = [("Indiana Limestone", 1.00), ("Edwards White", 0.52)]
@@ -432,8 +413,6 @@ def _flowing_fraction_cell(rock_type, expected_table_value):
     data.system.rock_type = rock_type
     output = calculate_pvbt_radial(data)
 
-    # f chega no cliente por parameters.f (get_adjusted_parameters), NAO por
-    # curve.metadata (esse e so a janela de validade da vazao).
     assert "f" in output["parameters"], "get_adjusted_parameters() nao devolve mais 'f'"
     f_value = output["parameters"]["f"]
     assert f_value == pytest.approx(expected_table_value)
@@ -474,8 +453,6 @@ def test_flowing_fraction_differs_between_rocks():
     assert values[0] != values[1], \
         "Flowing Fraction (f) saiu igual para rocks com fracoes diferentes na tabela -- suspeita de valor chumbado"
 
-
-# --- Baseline visual (pytest-mpl) ---------------------------------------
 
 def _baseline_curves():
     return [

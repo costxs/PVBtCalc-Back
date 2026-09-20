@@ -40,11 +40,6 @@ class AnalicalInput(BaseModel):
     wellbore_radius_in: Optional[float] = None
     payzone_thickness_ft: Optional[float] = None
 
-# pvbt / volumetobt / timetobt podem vir None: os calculadores em
-# PVBTfunc.py retornam None quando exp_term = Dn*lambda > 700 (sem
-# breakthrough dentro do dominio numerico). O front ja trata null
-# (Results.getFormattedVal -> '-', Chart -> 0). Sem o Optional, o
-# response_model dispara ResponseValidationError -> 500 sem header CORS.
 class PVBtOutputPoint(BaseModel):
     pore_volume_to_breakthrough: Optional[float]
 
@@ -111,7 +106,7 @@ class RadialGeometryInput(BaseModel):
     drainage_radius_ft: Optional[float] = None
 
 class RadialTargetsInput(BaseModel):
-    target_mode: str  # "length" | "skin"
+    target_mode: str
     targets: List[float]
 
 class FlowrateSweepInput(BaseModel):
@@ -144,25 +139,15 @@ class RadialCurveResult(BaseModel):
     target: float
     target_label: str
     flowratepoints: List[float]
-    # elemento nulavel (List[Optional[float]]), NAO lista-inteira-nula:
-    # onde status[i] == "clipped" (expoente batendo em LIMITE_EXP, regime de
-    # vazao ~nula) o valor sai como expm1(700)/K -- a poucas ordens do teto
-    # do float64 e prestes a virar inf/nan nao-serializavel. Nesses indices o
-    # backend emite None. Mesmo padrao que a Fase 0 aplicou ao Linear
-    # (PVBtOutputCurveWhithDetails: exp_term > 700 -> None).
     pvbtpoints: List[Optional[float]]
     acidvolumepoints: List[Optional[float]]
     insterticialvelocity: List[float]
     ida: List[float]
-    # volumetobt e o MESMO valor calculado de acidvolumepoints (acid_volume *
-    # 1e6) -- nula nos mesmos indices, pelo mesmo motivo.
     volumetobt: List[Optional[float]]
     timetobt: List[Optional[float]]
     wormholevelocity: List[float]
     darcyvelocity: List[float]
     status: List[str]
-    # array paralelo a status/flowratepoints -- mesmo indice, mesmo ponto.
-    # NAO e objeto-por-ponto (decisao de design: SoA, nao AoS).
     within_validity_range: List[bool]
     metadata: Optional[RadialCurveValidity]
 
@@ -179,11 +164,6 @@ class RadialAdjustedParameters(BaseModel):
 class RadialCurveOutput(BaseModel):
     output_mode: str
     curves: List[RadialCurveResult]
-    # Bloco de parametros efetivamente carregados pelo backend para este
-    # request (acid system + concentracao + temperatura). Existe para que o
-    # painel "Adjusted Parameters" do frontend consiga confirmar visualmente
-    # qual AcidSetup foi resolvido -- sem isso, um mapeamento string->classe
-    # incorreto fica invisivel (so aparece como numero errado la na frente).
     parameters: RadialAdjustedParameters
 
 class SkinEvolutionInput(BaseModel):
@@ -206,13 +186,6 @@ class DesignPlotOutput(BaseModel):
     series: List[DesignPlotSeries]
     has_clipped_volume: bool = False
 
-
-# --- Export radial (matplotlib figures + workbook) -------------------------
-# Contrato de ENTRADA do /export/radial* -- o front reenvia os MESMOS dados
-# que ja tem em memoria (RadialCurveResult de /pvbtradialcurve,
-# DesignPlotSeries de /designplot, o dict cru de /skinevolution) mais os
-# metadados de Inputs e as escolhas de UI (chips ativos, limites de eixo).
-# NENHUM campo aqui e recalculado -- so redesenhado/reformatado.
 
 class SkinEvolutionPoint(BaseModel):
     x: float
@@ -244,11 +217,8 @@ class ExportInputs(BaseModel):
 
 
 class RadialExportOptions(BaseModel):
-    # Alvo/skin usados pro destaque no Design Plot / Skin (mesmo valor que o
-    # front ja calcula pra tabela -- ver export.tsx exportRadialAll).
     target_lengths: Optional[List[float]] = None
     target_skin: Optional[float] = None
-    # Chips ativos (quadro de controle do Chart.tsx) -- None = todos ativos.
     active_targets: Optional[List[str]] = None
     active_temperatures: Optional[List[float]] = None
     active_flowrates: Optional[List[str]] = None
@@ -268,4 +238,40 @@ class RadialExportRequest(BaseModel):
     design_series: List[DesignPlotSeries] = []
     skin_series: Dict[str, List[SkinEvolutionPoint]] = {}
     options: RadialExportOptions = RadialExportOptions()
-
+
+
+class LinearModelCurve(BaseModel):
+    id: str
+    rock_type: str = ""
+    acid_type: str = ""
+    acid_concentration: Optional[float] = None
+    porosity: Optional[float] = None
+    temperature_c: Optional[float] = None
+    core_length_in: Optional[float] = None
+    core_diameter_in: Optional[float] = None
+    flowratepoints: List[float]
+    pvbtpoints: List[Optional[float]]
+    insterticialvelocity: List[Optional[float]] = []
+    ida: List[Optional[float]] = []
+    wormholevelocity: List[Optional[float]] = []
+    volumetobt: List[Optional[float]] = []
+    timetobt: List[Optional[float]] = []
+    darcyvelocity: List[Optional[float]] = []
+    within_validity_range: List[bool] = []
+    metadata: Optional[Dict[str, float]] = None
+
+
+class LinearExperimentalCurve(BaseModel):
+    id: str
+    flowratepoints: List[float]
+    pvbtpoints: List[Optional[float]]
+
+
+class LinearExportOptions(BaseModel):
+    show_validity_band: bool = True
+
+
+class LinearExportRequest(BaseModel):
+    curves: List[LinearModelCurve] = []
+    experimental_curves: List[LinearExperimentalCurve] = []
+    options: LinearExportOptions = LinearExportOptions()

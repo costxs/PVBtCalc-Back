@@ -21,7 +21,6 @@ def calculate_pvbt_radial(data: RadialCurveInput):
         drainage_radius_ft=data.geometry.drainage_radius_ft,
     )
 
-    # A UI coleta o sweep radial em bbl/min (SimuCard.tsx:283), nao cm3/min.
     flow_min_m3s = flowrate_to_m3s(data.flowrate_sweep.min, "bbl_min")
     flow_max_m3s = flowrate_to_m3s(data.flowrate_sweep.max, "bbl_min")
 
@@ -34,8 +33,6 @@ def calculate_pvbt_radial(data: RadialCurveInput):
     )
 
     return {
-        # Fase 9: "pvbt" so quando geometry.drainage_radius_ft foi informado;
-        # senao "volume" (frontend omite a coluna PVBt). Antes saia chumbado.
         "output_mode": master.output_mode,
         "curves": curves,
         "parameters": master.get_adjusted_parameters(),

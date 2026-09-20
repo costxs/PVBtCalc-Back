@@ -83,19 +83,15 @@ RC_PARAMS = {
     "svg.fonttype": "none",
 }
 
-# Okabe & Ito (2008) -- paleta qualitativa acessivel a daltonismo, ordem
-# fixa. Cor de uma serie = PALETTE[indice_do_valor_numa_lista_ordenada %
-# len(PALETTE)] -- nunca a ordem de chegada no payload, pra "5.00 ft" ter
-# sempre a mesma cor em toda figura onde aparecer.
 PALETTE = [
-    "#0072B2",  # blue
-    "#E69F00",  # orange
-    "#009E73",  # green
-    "#D55E00",  # vermillion
-    "#CC79A7",  # pink
-    "#56B4E9",  # sky blue
-    "#F0E442",  # yellow
-    "#000000",  # black
+    "#0072B2",
+    "#E69F00",
+    "#009E73",
+    "#D55E00",
+    "#CC79A7",
+    "#56B4E9",
+    "#F0E442",
+    "#000000",
 ]
 
 OUT_OF_WINDOW_GRAY = "#616161"
@@ -179,10 +175,6 @@ def _resolve_limits(auto_min: Optional[float], auto_max: Optional[float], limits
     return (lo if lo is not None else auto_min, hi if hi is not None else auto_max)
 
 
-# ---------------------------------------------------------------------------
-# Simulation Chart -- X = Injection Rate (linear), Y = Acid Volume (log)
-# ---------------------------------------------------------------------------
-
 @dataclass
 class SimCurveData:
     label: str
@@ -192,6 +184,17 @@ class SimCurveData:
     q_opt: Optional[float] = None
     validity_min: Optional[float] = None
     validity_max: Optional[float] = None
+    y_opt: Optional[float] = None
+    join_at_boundary: bool = False
+
+
+@dataclass
+class ExpPointsData:
+    """Pontos experimentais: so marcadores, sem linha, sem otimo, sem janela."""
+    label: str
+    color: str
+    x: Sequence[float]
+    y: Sequence[Optional[float]]
 
 
 def _split_validity(fps: Sequence[float], vals: Sequence[Optional[float]], vmin: Optional[float], vmax: Optional[float]):
@@ -206,6 +209,17 @@ def _split_validity(fps: Sequence[float], vals: Sequence[Optional[float]], vmin:
     return xs, ys, inside
 
 
+def _window_crossing(xs, ys, k: int, vmin: float, vmax: float) -> Optional[tuple[float, float]]:
+    """Vertice onde o segmento k->k+1 cruza uma borda da janela (x linear, y
+    geometrico -- o mesmo interpY da tela). None se nao ha cruzamento valido."""
+    lo, hi = min(xs[k], xs[k + 1]), max(xs[k], xs[k + 1])
+    xb = vmin if lo < vmin < hi else vmax if lo < vmax < hi else None
+    if xb is None:
+        return None
+    yb = _interp_log_y(xs[k], ys[k], xs[k + 1], ys[k + 1], xb)
+    return None if yb is None else (xb, yb)
+
+
 def _draw_simulation_curve(ax, curve: SimCurveData, show_band: bool) -> None:
     xs = list(curve.flowratepoints)
     ys = [None if v is None else float(v) for v in curve.acidvolumepoints]
@@ -218,8 +232,6 @@ def _draw_simulation_curve(ax, curve: SimCurveData, show_band: bool) -> None:
     else:
         inside = [True] * len(xs)
 
-    # Segmenta em trechos contiguos dentro/fora pra alternar solido/tracejado
-    # sem religar pontos que passam por None (clipped).
     n = len(xs)
     i = 0
     plotted_label = False
@@ -234,6 +246,15 @@ def _draw_simulation_curve(ax, curve: SimCurveData, show_band: bool) -> None:
             else:
                 break
             j += 1
+        if curve.join_at_boundary and has_window and seg_x:
+            if i > 0 and ys[i - 1] is not None and ys[i] is not None:
+                pt = _window_crossing(xs, ys, i - 1, curve.validity_min, curve.validity_max)
+                if pt:
+                    seg_x.insert(0, pt[0]); seg_y.insert(0, pt[1])
+            if j < n and ys[j - 1] is not None and ys[j] is not None:
+                pt = _window_crossing(xs, ys, j - 1, curve.validity_min, curve.validity_max)
+                if pt:
+                    seg_x.append(pt[0]); seg_y.append(pt[1])
         if len(seg_x) >= 1:
             style = dict(color=curve.color if cur_inside else OUT_OF_WINDOW_GRAY, linewidth=RC_PARAMS["lines.linewidth"])
             if not cur_inside:
@@ -250,7 +271,10 @@ def _draw_simulation_curve(ax, curve: SimCurveData, show_band: bool) -> None:
         if curve.validity_max < xmax_plot:
             ax.axvspan(curve.validity_max, xmax_plot, color=OUT_OF_WINDOW_GRAY, alpha=OUT_OF_WINDOW_BAND_ALPHA, lw=0)
 
-    if curve.q_opt is not None:
+    if curve.q_opt is not None and curve.y_opt is not None:
+        if min(xs) <= curve.q_opt <= max(xs):
+            ax.plot([curve.q_opt], [curve.y_opt], marker="o", markersize=4, color=curve.color, markeredgecolor="white", markeredgewidth=0.5, zorder=5, linestyle="none")
+    elif curve.q_opt is not None:
         for k in range(n - 1):
             x0, x1 = xs[k], xs[k + 1]
             if ys[k] is None or ys[k + 1] is None:
@@ -269,8 +293,14 @@ def render_simulation_figure(
     show_optimum_path: bool = False,
     x_limits: Optional[dict] = None,
     y_limits: Optional[dict] = None,
+    x_label: str = "Injection Rate, gal/(ft·min)",
+    y_label: str = "Acid Volume, gal/ft",
+    x_log: bool = False,
+    exp_points: Sequence[ExpPointsData] = (),
+    optimum_legend_label: Optional[str] = None,
 ) -> bytes:
-    fig = build_simulation_figure(curves, size, show_validity_band, show_optimum_path, x_limits, y_limits)
+    fig = build_simulation_figure(curves, size, show_validity_band, show_optimum_path, x_limits, y_limits,
+                                  x_label, y_label, x_log, exp_points, optimum_legend_label)
     return _savefig_png(fig)
 
 
@@ -281,9 +311,18 @@ def build_simulation_figure(
     show_optimum_path: bool = False,
     x_limits: Optional[dict] = None,
     y_limits: Optional[dict] = None,
+    x_label: str = "Injection Rate, gal/(ft·min)",
+    y_label: str = "Acid Volume, gal/ft",
+    x_log: bool = False,
+    exp_points: Sequence[ExpPointsData] = (),
+    optimum_legend_label: Optional[str] = None,
 ) -> Figure:
     """Mesma logica de render_simulation_figure, mas devolve a Figure (nao o
-    PNG) -- usado por testes (pytest-mpl / comparacao de imagem baseline)."""
+    PNG) -- usado por testes (pytest-mpl / comparacao de imagem baseline).
+
+    Os defaults dos kwargs de rotulo/escala/pontos reproduzem EXATAMENTE a
+    figura radial original; o export linear so troca rotulos, liga x_log e
+    passa exp_points (marcadores sem linha, sem otimo, sem janela)."""
     with matplotlib.rc_context(RC_PARAMS):
         fig, canvas = _new_figure(size)
         ax = fig.add_subplot(111)
@@ -291,10 +330,18 @@ def build_simulation_figure(
         for c in curves:
             _draw_simulation_curve(ax, c, show_validity_band)
 
+        for ep_ in exp_points:
+            pts = [(x, y) for x, y in zip(ep_.x, ep_.y) if y is not None and y > 0 and x > 0]
+            if pts:
+                ax.plot([p[0] for p in pts], [p[1] for p in pts], linestyle="none", marker="s",
+                        markersize=3.5, markerfacecolor="none", markeredgecolor=ep_.color,
+                        markeredgewidth=1.0, label=ep_.label, zorder=6)
+
+        if optimum_legend_label and any(c.q_opt is not None and c.y_opt is not None for c in curves):
+            ax.plot([], [], linestyle="none", marker="o", markersize=4, color="#616161",
+                    markeredgecolor="white", markeredgewidth=0.5, label=optimum_legend_label)
+
         if show_optimum_path:
-            # So conecta os q_opt JA MARCADOS por curva (interpolacao
-            # geometrica em cima do dado existente, mesma _interp_log_y de
-            # cada marcador individual) -- nao e uma curva nova calculada.
             opt_points: list[tuple[float, float]] = []
             for c in curves:
                 if c.q_opt is None:
@@ -316,8 +363,6 @@ def build_simulation_figure(
                     label="Optimum path", zorder=4,
                 )
 
-        # Y em decadas, so com pontos DENTRO da janela de validade (pedido
-        # explicito) -- se nenhuma curva tiver janela, usa todos os pontos.
         in_window_ys: list[float] = []
         any_window = any(c.validity_min is not None for c in curves)
         for c in curves:
@@ -328,6 +373,8 @@ def build_simulation_figure(
                     if not (c.validity_min <= x <= c.validity_max):
                         continue
                 in_window_ys.append(float(y))
+        for ep_ in exp_points:
+            in_window_ys.extend(float(y) for y in ep_.y if y is not None and y > 0)
         auto_ymin, auto_ymax = (min(in_window_ys), max(in_window_ys)) if in_window_ys else (None, None)
         if auto_ymin is not None:
             auto_ymin, auto_ymax = _decade_round(auto_ymin, auto_ymax)
@@ -335,33 +382,27 @@ def build_simulation_figure(
         ymin, ymax = _resolve_limits(auto_ymin, auto_ymax, y_limits)
         xmin, xmax = _resolve_limits(None, None, x_limits)
 
-        ax.set_xlabel("Injection Rate, gal/(ft·min)")
-        ax.set_ylabel("Acid Volume, gal/ft")
-        _style_axes(ax, x_log=False, y_log=True)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        _style_axes(ax, x_log=x_log, y_log=True)
         if xmin is not None or xmax is not None:
             ax.set_xlim(left=xmin, right=xmax)
         if ymin is not None or ymax is not None:
             ax.set_ylim(bottom=ymin, top=ymax)
 
-        if len(curves) > 1 or (curves and curves[0].label):
+        if len(curves) > 1 or (curves and curves[0].label) or exp_points:
             ax.legend(loc="best", frameon=False, ncol=2 if size == "double" else 1)
 
         fig.tight_layout(pad=0.3)
         return fig
 
 
-# ---------------------------------------------------------------------------
-# Design Plot -- Y = Wormhole Length (log, espelhado), X-bottom = Rate (log),
-# X-top (twiny) = Volume (log). Os dois eixos X cobrem o MESMO numero de
-# decadas (mesma regra que Chart.tsx aplica no grafico interativo).
-# ---------------------------------------------------------------------------
-
 @dataclass
 class DesignSeriesData:
     label: str
     color: str
-    optimum_rate_series: Sequence[Sequence[float]]  # [[rate, length], ...]
-    optimum_volume_series: Sequence[Sequence[float]]  # [[volume, length], ...]
+    optimum_rate_series: Sequence[Sequence[float]]
+    optimum_volume_series: Sequence[Sequence[float]]
 
 
 def _design_axis_extents(all_series: Sequence[DesignSeriesData]):
@@ -398,8 +439,8 @@ def _design_axis_extents(all_series: Sequence[DesignSeriesData]):
 def render_design_figure(
     series_list: Sequence[DesignSeriesData],
     size: FigureSize = "single",
-    x_limits: Optional[dict] = None,  # aplica so ao eixo de Rate (inferior)
-    y_limits: Optional[dict] = None,  # aplica aos dois eixos Y (espelhados)
+    x_limits: Optional[dict] = None,
+    y_limits: Optional[dict] = None,
 ) -> bytes:
     fig = build_design_figure(series_list, size, x_limits, y_limits)
     return _savefig_png(fig)
@@ -430,8 +471,6 @@ def build_design_figure(
 
         y_min, y_max = _resolve_limits(ext["y_min"], ext["y_max"], y_limits)
         rate_min, rate_max = _resolve_limits(ext["rate_min"], ext["rate_max"], x_limits)
-        # Volume (topo) NUNCA le X Limits (pedido explicito) -- so decada-
-        # arredondado do dado, sempre.
         vol_min, vol_max = ext["vol_min"], ext["vol_max"]
 
         ax_rate.set_xlabel("Optimum Injection Rate, gal/(ft·min)")
@@ -456,15 +495,11 @@ def build_design_figure(
         return fig
 
 
-# ---------------------------------------------------------------------------
-# Skin Evolution -- X = Acid Volume (log), Y = Skin (linear, max 0)
-# ---------------------------------------------------------------------------
-
 @dataclass
 class SkinSeriesData:
     label: str
     color: str
-    points: Sequence[tuple[float, float]]  # (volume, skin)
+    points: Sequence[tuple[float, float]]
 
 
 def render_skin_figure(

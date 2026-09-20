@@ -12,7 +12,7 @@ deste calculo especifico (nao duplicam o PVBt(q) inteiro, so os termos
 que a derivada precisa).
 """
 import numpy as np
-from scipy.optimize import brentq  # UNICO import novo do modulo
+from scipy.optimize import brentq
 
 
 def _velocidade_no_wormhole(q_o, a, n, b, A_o):
@@ -73,7 +73,6 @@ def optimum_flowrate_linear(a, b, n, keff, A_o, lc, phi, C_Ao, X):
 
 
 if __name__ == "__main__":
-    # mesmo caso do Apendice A, ja validado nesta conversa
     n, a, b, k0 = 0.65, 5.10e-4, 35.1, 2.43e6
     r_c = (1.5/2)*0.0254
     A_o = np.pi*r_c**2

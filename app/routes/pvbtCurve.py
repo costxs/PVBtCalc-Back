@@ -21,9 +21,6 @@ def calculate_pvbt(data: PVBtInputCurve):
     )
     pvbt, flowrates, velocity, ida, volumetobt, timetobt, wormhole, darcy, status = master.PVBtCurveCalculatorWhiteDetails()
 
-    # Fase 6.3/6.4: janela de validade da vazao. Logica isolada em
-    # app.services.linear_validity; os escalares saem de um PVBtSetup ja
-    # montado (master.getSetup) -- nenhum recalculo novo dentro de PVBTfunc.
     setup = master.getSetup()
     within_validity_range, validity_metadata = linear_validity_window(
         flowrates,
@@ -37,6 +34,20 @@ def calculate_pvbt(data: PVBtInputCurve):
         C_Ao=setup.acidsetup.acid_concentration,
         X=setup.acid_volumetric_dissolving_power100,
     )
+
+    if validity_metadata is not None:
+        point = PVBtMaster(
+            acidtype=AcidType.getAcidTypeByStr(data.acid_type),
+            acid_concentration=data.acid_concentration,
+            core_diameter=data.core_diameter,
+            core_length=data.core_length,
+            core_porosity=data.core_porosity,
+            rock_type=data.rock_type,
+            temperature=data.temperature,
+            flowrate=validity_metadata["q_opt_cm3_min"],
+        ).PVBtPointCalculator()
+        if point is not None:
+            validity_metadata["pvbt_at_q_opt"] = point
 
     return {
         "pvbtpoints": pvbt,

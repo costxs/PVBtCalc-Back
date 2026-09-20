@@ -20,7 +20,7 @@ from scipy.optimize import brentq, minimize_scalar
 try:
     from app.services.units import flowrate_to_m3s, m3s_to_flowrate, flowrate_to_display
     from app.services.PVBTfunc import ROCKFLOWFRACTION
-except ImportError:  # roda o harness de regressao standalone (python app/services/PVBTradialFunc.py)
+except ImportError:
     import os
     import sys
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -33,7 +33,7 @@ class RadialGeometry:
     r_w_m: float
     h_o_m: float
     porosity: float
-    L: float = 1.0  # constante do artigo -- NUNCA derivar de r_w ou h_o
+    L: float = 1.0
 
     def __post_init__(self):
         if self.r_w_m <= 0 or self.h_o_m <= 0:
@@ -56,7 +56,7 @@ class RadialGeometry:
 
 
 class PVBtRadial:
-    LIMITE_EXP = 700.0  # onde exp() estoura o float64
+    LIMITE_EXP = 700.0
 
     def __init__(self, geometry: RadialGeometry, a, b, n, k0, Dm,
                  C_Ao, X, flowrate_m3s, M=60.0, f=1.0):
@@ -102,22 +102,6 @@ class PVBtRadial:
         expoente = np.clip(K * self.alpha(lam), None, self.LIMITE_EXP)
         return self.f * np.expm1(expoente) / K
 
-    # Flowing fraction (f) -- fracao dos poros que efetivamente recebe
-    # fluxo. DUAS EXTRAPOLACOES, ambas razoaveis mas nao deduzidas no
-    # artigo:
-    #  (1) POSICAO NA ALGEBRA: a Secao 3 (teoria radial) nao tem termo
-    #      de f. Os autores so usam f na Secao 5 (validacao), como
-    #      ajuste ad hoc para abater volume ("A flowing fraction of 0.2
-    #      was used in the model to account for the low acid volumes").
-    #      Aqui aplicamos como multiplicador de cabeca em V_A e tau no radial,
-    #      por analogia com a Eq. 10 do linear. E a leitura mais provavel --
-    #      f constante em q, reducao proporcional -- mas e nossa, nao do artigo.
-    #  (2) VALORES: os 6 numeros em ROCKFLOWFRACTION nao tem fonte
-    #      documentada neste repo. O artigo cita UM valor (0.2, chalk do
-    #      Burton et al.). Note que a tabela local da Austin Chalk=0.92,
-    #      bem diferente do 0.2 do artigo para um chalk.
-    # Se algum dia o modelo divergir de dado experimental em rocha
-    # heterogenea, estes dois pontos sao os primeiros a revisar.
     def acid_volume(self, lam):
         """Eq. 42, forma fechada. f entra via _integral_fechada."""
         return (self.g.L * self.g.A_o) / (self.C_Ao * self.X) * self._integral_fechada(lam)
@@ -149,8 +133,6 @@ class PVBtRadial:
     def pore_volume_to_breakthrough(self, lam):
         return self.acid_volume(lam) / self.g.pore_volume(lam)
 
-    # ---- unico ponto do modulo que precisa de raiz: sem forma fechada
-    # porque (beta+lambda)^(n+1) com n fracionario nao isola. ----
     def penetration_from_volume(self, V_alvo, lam_max=200.0):
         if V_alvo <= 0:
             return 0.0
@@ -162,14 +144,6 @@ class PVBtRadial:
                 raise ValueError("penetracao fora de faixa fisica para este volume")
         return brentq(f, 0.0, hi, xtol=1e-13, rtol=1e-13)
 
-    # ---- unico ponto que precisa de otimizacao: a curva em U nao tem
-    # forma fechada para o ponto de minimo. ----
-    # Trava fisica do alargamento da janela de busca (analoga ao `hi > 1e8`
-    # de penetration_from_volume). Vazao de acidificacao matricial real fica
-    # entre ~1e-4 e ~10 bbl/min; estes limites (~3.8e-7 e ~3.8e2 bbl/min) sao
-    # varias ordens de grandeza mais folgados que qualquer caso legitimo --
-    # se o alargamento chegar aqui, a curva nao tem minimo interior fisico e
-    # devolver a borda seria um q_opt sem sentido.
     Q_SEARCH_FLOOR_M3S = 1e-9
     Q_SEARCH_CEIL_M3S = 1.0
 
@@ -207,7 +181,7 @@ class PVBtRadial:
             r = minimize_scalar(V, bounds=(q_lo, q_hi), method="bounded",
                                 options={"xatol": 1e-12})
             q = r.x
-            span = np.log(q_hi / q_lo)  # comparacao em decadas, nao linear
+            span = np.log(q_hi / q_lo)
             if np.log(q / q_lo) < _edge_frac * span:
                 q_lo /= 10.0
             elif np.log(q_hi / q) < _edge_frac * span:
@@ -231,18 +205,8 @@ class PVBtRadial:
 FT_TO_M = 0.3048
 IN_TO_M = 0.0254
 
-# Busca de q_opt: a janela inicial fica OPT_SEARCH_SCALE vezes abaixo do
-# fundo e acima do topo do flowrate_sweep (ja em m3/s). optimum_flowrate
-# alarga sozinho se o minimo ainda cair na borda -- isto e so o chute
-# inicial ancorado no que o usuario pediu, nunca um teto fixo.
 OPT_SEARCH_SCALE = 10.0
 
-# Piso para um limite inferior de vazao igual a zero. log(0) nao existe, entao
-# NENHUM dos dois lugares que consomem flow_min pode comecar em 0: nem a janela
-# de busca de q_opt (busca em escala log), nem o proprio sweep da curva (o
-# ponto q=0 gera v_o=0 -> divisao por zero em tau/damkholer -> inf/nan no JSON).
-# O piso e relativo ao topo do sweep (varias ordens abaixo de qualquer ponto
-# util), nao um absoluto -- e a MESMA decisao aplicada nos dois lugares.
 SWEEP_FLOOR_FRAC = 1e-9
 
 
@@ -279,10 +243,10 @@ def acid_density(acid_concentration, temperature_c):
 def acid_volumetric_dissolving_power100(acid_concentration, temperature_c):
     """Mesma cadeia densidade->poder de dissolucao de PVBTfunc.py:PVBtSetup
     (Set*DissolvingPower*), duplicada aqui pelo mesmo motivo acima."""
-    vm, MWm, va, MWa = 1, 100.1, 2, 36.5  # CaCO3 / HCl
+    vm, MWm, va, MWa = 1, 100.1, 2, 36.5
     gravimetric = acid_concentration * ((vm * MWm) / (va * MWa))
-    roa = acid_density(acid_concentration, temperature_c) * 62.428  # g/cm3 -> lbm/ft3
-    rom = 169.0  # CaCO3 density, lbm/ft3
+    roa = acid_density(acid_concentration, temperature_c) * 62.428
+    rom = 169.0
     volumetric = gravimetric * (roa / rom)
     return volumetric / acid_concentration
 
@@ -322,10 +286,6 @@ class RadialCurveMaster:
         self.acid_concentration = acid_concentration
         self.rock_type = rock_type
         self.payzone_thickness_ft = payzone_thickness_ft
-        # Fase 9: hoje o raio de drenagem so decide output_mode (ver a property
-        # abaixo). Ainda NAO entra na formulacao fechada do modelo -- ver
-        # docstring de RadialGeometry: L e constante do artigo, nao se deriva
-        # r_w/h_o/r_e dela.
         self.drainage_radius_ft = drainage_radius_ft
         self.geometry = RadialGeometry(
             r_w_m=wellbore_radius_in * IN_TO_M,
@@ -368,18 +328,10 @@ class RadialCurveMaster:
             "a": self.acidsetup.a,
             "b": self.acidsetup.b,
             "k0": self.acidsetup.k0,
-            # Flowing fraction (ROCKFLOWFRACTION[rock_type]) -- ja usado
-            # internamente em _integral_fechada (self.f) mas nunca saia daqui
-            # antes; export/Adjusted Parameters liam de curve.metadata, que
-            # e a janela de validade (RadialCurveValidity), nunca teve essa
-            # chave.
             "f": self.f,
         }
 
     def build_curves(self, target_mode, targets_display, flow_min_m3s, flow_max_m3s, steps):
-        # Mesmo piso de opt_search_window: se o sweep pedido comeca em 0, o
-        # primeiro ponto da curva vira flow_max_m3s * SWEEP_FLOOR_FRAC em vez de
-        # q=0 (que geraria inf/nan no JSON antes de qualquer flag de validade).
         flow_start = floor_zero_flow(flow_min_m3s, flow_max_m3s)
         flow_points = np.linspace(flow_start, flow_max_m3s, steps)
         return [
@@ -432,46 +384,18 @@ class RadialCurveMaster:
                 f=self.f,
             )
 
-            # Velocidade no wormhole e condicao de contorno na face do poco
-            # (lam=0) -- mesma convencao do modelo linear, onde Wv nao depende
-            # do comprimento do core.
             wv = model.v_o * model.omega(0.0)
 
             expoente = model.K * model.alpha(lam)
             is_clipped = expoente > PVBtRadial.LIMITE_EXP
 
-            # Onde o expoente clipa em LIMITE_EXP (regime de vazao ~nula, sem
-            # breakthrough fisico), acid_volume/tau/pvbt saem como
-            # expm1(700)/K -- a poucas ordens do teto do float64 e prestes a
-            # virar inf/nan nao-serializavel em JSON. Emitimos None nesses
-            # pontos, igual ao Linear (PVBTfunc.py: exp_term > 700 -> None).
-            # status[i] == "clipped" continua marcando o ponto.
-            # m3 -> gal/ft: mesma convencao dos outros 3 pontos do radial que
-            # fazem essa conversao (RadialCurveMaster.generate_design_plot
-            # nesta classe; tools.py:get_correct_param e
-            # generate_skin_evolution) -- dividir pela espessura REAL do
-            # payzone (self.payzone_thickness_ft), nao multiplicar por um
-            # fator fixo de 0.3048. acid_volume(lam) ja e o volume TOTAL do
-            # poco (A_o dentro da formula e proporcional a h_o_m real), entao
-            # sem essa divisao o numero escala com a espessura do payzone em
-            # vez de ser uma taxa por pe -- e so por coincidencia bate com o
-            # valor certo quando payzone_thickness_ft ~= 1/0.3048 (~3.28 ft).
             M3_TO_GAL = 264.172
             acid_volume_gal_ft = None if is_clipped else (model.acid_volume(lam) * M3_TO_GAL) / self.payzone_thickness_ft
 
-            # m3/s -> bbl/min -> gal/(ft.min) (Fase 8: eixo X do grafico e
-            # coluna q0 da tabela seguem o artigo, que normaliza por pe de
-            # zona -- ver flowrate_to_display em units.py).
             flowratepoints.append(flowrate_to_display(m3s_to_flowrate(q, "bbl_min"), self.payzone_thickness_ft))
             pvbtpoints.append(None if is_clipped else model.pore_volume_to_breakthrough(lam))
-            acidvolumepoints.append(acid_volume_gal_ft)  # m3/m -> gal/ft
+            acidvolumepoints.append(acid_volume_gal_ft)
             insterticialvelocity.append(model.v_o / self.geometry.porosity)
-            # 1/Da NO ALVO desta curva. Da varia com lambda no radial:
-            # K = model.K e Da*omega e CONSTANTE (nao varia com lambda), logo
-            # Da(lam) = K / omega(lam) e 1/Da(lam) = omega(lam) / K. Usar
-            # omega(lam) direto -- NAO reconstituir a partir de um Da guardado
-            # nem de omega(0) (davam 1/Da identico para alvos diferentes na
-            # mesma vazao, mascarando a dependencia do alvo).
             ida.append(model.omega(lam) / model.K)
             volumetobt.append(acid_volume_gal_ft)
             timetobt.append(None if is_clipped else model.time_to_breakthrough_s(lam))
@@ -480,7 +404,7 @@ class RadialCurveMaster:
             status.append("clipped" if is_clipped else "ok")
 
             if window is None:
-                within_validity_range.append(True)  # sem janela => sem anotacao
+                within_validity_range.append(True)
             else:
                 _q_opt, v_min, v_max = window
                 within_validity_range.append(bool(v_min <= q <= v_max))
@@ -515,15 +439,12 @@ class RadialCurveMaster:
 
     def generate_design_plot(self, temperatures_k, flow_min_m3s, flow_max_m3s, target_mode, targets, steps=20):
         if not targets:
-            # Fallback seguro caso o payload não traga targets
             max_lam = target_to_lambda(20.0, "length", self.geometry.beta, self.geometry.L)
         else:
             max_lam = max(target_to_lambda(t, target_mode, self.geometry.beta, self.geometry.L) for t in targets)
             
         max_length_ft = (max_lam * self.geometry.L) / FT_TO_M
         
-        # Mantém no mínimo 20 passos, mas aumenta se o alvo for longo para garantir resolução
-        # (ex: 4 passos por pé = 0.25 ft de resolução, ideal para a leitura guiada)
         steps_calculados = max(steps, int(np.ceil(max_length_ft * 4)))
         
         start_ft = 1.0 if max_length_ft >= 1.0 else max_length_ft * 0.1
@@ -539,11 +460,9 @@ class RadialCurveMaster:
             curva_rate = []
             curva_volume = []
             
-            # Recalculate parameters dependent on temperature
             current_Dm = diffusion_coefficient(t_k, self.acid_concentration)
             current_X = acid_volumetric_dissolving_power100(self.acid_concentration, t_k - 273.15)
             
-            # Create a model instance for this temperature to run optimum search
             model = PVBtRadial(
                 self.geometry,
                 a=self.acidsetup.a, b=self.acidsetup.b, n=self.acidsetup.n,
@@ -557,24 +476,19 @@ class RadialCurveMaster:
                 try:
                     q_opt, v_opt = model.optimum_flowrate(lam, q_lo, q_hi)
                     
-                    # Vazão ótima em gal/(ft.min)
                     q_opt_gal_min = q_opt * M3_TO_GAL * 60.0
                     q_opt_norm = q_opt_gal_min / self.payzone_thickness_ft
                     
-                    # Volume ótimo em gal/ft
                     v_opt_gal = v_opt * M3_TO_GAL
                     v_opt_norm = v_opt_gal / self.payzone_thickness_ft
 
-                    # Regra de campo (Burton et al.): Tratamentos reais não passam muito de 700 gal/ft.
-                    # Volumes acima de 1000 gal/ft são absurdos fisicamente. Cortar aqui.
                     if v_opt_norm > 1000.0:
                         has_clipped_volume = True
-                        break # Se passou de 1000, os próximos alvos (maiores) serão piores.
+                        break
                     
                     curva_rate.append([q_opt_norm, l_ft])
                     curva_volume.append([v_opt_norm, l_ft])
                 except ValueError:
-                    # Se não encontrar o ótimo, pula o ponto
                     continue
 
             series_results.append({
@@ -591,7 +505,7 @@ class RadialCurveMaster:
 
 if __name__ == "__main__":
     import warnings
-    warnings.simplefilter("error", RuntimeWarning)  # qualquer overflow silencioso vira erro no teste
+    warnings.simplefilter("error", RuntimeWarning)
 
     geo = RadialGeometry(r_w_m=0.0762, h_o_m=0.3048, porosity=0.15)
     m = PVBtRadial(geo, a=5.10e-4, b=35.1, n=0.65, k0=2.43e6,
@@ -617,19 +531,12 @@ if __name__ == "__main__":
     print(f"K (caso ref q_o=1e-5 m3/s)   = {m.K:.6f}  (esperado ~114.895)")
     assert abs(m.K - 114.895) < 0.01
 
-    # janela ancorada na propria vazao do fixture (analogo ao sweep da rota)
     q_lo0, q_hi0 = m.q_o * 1e-3, m.q_o * 1e3
     q_opt, V_min = m.optimum_flowrate(lam, q_lo0, q_hi0)
     print(f"optimum_flowrate              : q={q_opt:.6e}  V={V_min:.6e}")
 
-    # Passo 7 -- guarda contra bug de escala/unidade voltar sem avisar.
-    # Com a conversao certa (bbl/min) numa GEOMETRIA DE CAMPO (payzone de
-    # dezenas de ft, nao o core de 1 ft do fixture acima), o meio do sweep
-    # radial default cai numa faixa de K fisicamente razoavel. O bug antigo
-    # (fator de cm3/min sobre bbl/min) jogava K ~1.6e5x para cima e disparava
-    # o clip de exp() em qualquer vazao normal.
-    geo_field = RadialGeometry(r_w_m=0.1, h_o_m=10.0, porosity=0.15)  # ~4 in x ~33 ft
-    q_field = flowrate_to_m3s(0.5, "bbl_min")  # 0.5 bbl/min, meio do sweep radial default
+    geo_field = RadialGeometry(r_w_m=0.1, h_o_m=10.0, porosity=0.15)
+    q_field = flowrate_to_m3s(0.5, "bbl_min")
     m_field = PVBtRadial(geo_field, a=5.10e-4, b=35.1, n=0.65, k0=2.43e6,
                          Dm=3.24e-9, C_Ao=0.15, X=0.5417, flowrate_m3s=q_field)
     print(f"K (0.5 bbl/min, geom. campo)  = {m_field.K:.6f}")
@@ -638,7 +545,7 @@ if __name__ == "__main__":
         f"(ver app/services/units.py e routes/pvbtRadialCurve.py)"
     )
     assert m_field.K * m_field.alpha(lam) < PVBtRadial.LIMITE_EXP, "expoente clipando em vazao normal"
-    assert abs(m3s_to_flowrate(q_field, "bbl_min") - 0.5) < 1e-12  # ida-e-volta da conversao
+    assert abs(m3s_to_flowrate(q_field, "bbl_min") - 0.5) < 1e-12
 
     print("\nsem RuntimeWarning ate aqui -- overflow guard funcionando.")
     print("todas as asserts passaram.")

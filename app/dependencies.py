@@ -27,16 +27,12 @@ async def _catch_all_errors(request: Request, call_next):
 
 
 def setup_middlewares(app):
-    # add_middleware empilha de fora pra dentro na ordem INVERSA de adicao:
-    # o ultimo adicionado fica mais externo. Adiciona-se o catch-all primeiro
-    # e o CORS depois, para que o CORS envolva o catch-all e adicione os
-    # headers tambem nas respostas de erro.
     app.middleware("http")(_catch_all_errors)
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Permitir todas as origens (apenas para desenvolvimento)
+        allow_origins=["*"],
         allow_credentials=True,
-        allow_methods=["*"],  # Permitir todos os métodos
-        allow_headers=["*"],  # Permitir todos os headers
+        allow_methods=["*"],
+        allow_headers=["*"],
     )

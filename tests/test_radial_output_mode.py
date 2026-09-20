@@ -60,10 +60,6 @@ def _payload(drainage_radius_ft):
     }
 
 
-# --------------------------------------------------------------------------
-# 1. schema: o campo existe e e opcional (item 3 do escopo -- "confirmar que
-#    drainage_radius chega ate la")
-# --------------------------------------------------------------------------
 def test_schema_drainage_radius_optional_and_defaulted():
     g = RadialGeometryInput(wellbore_radius_in=6.0, payzone_thickness_ft=200.0)
     assert g.drainage_radius_ft is None
@@ -71,35 +67,25 @@ def test_schema_drainage_radius_optional_and_defaulted():
     g2 = RadialGeometryInput(wellbore_radius_in=6.0, payzone_thickness_ft=200.0, drainage_radius_ft=1500.0)
     assert g2.drainage_radius_ft == 1500.0
 
-    # e chega intacto ate a raiz do input da rota
     parsed = RadialCurveInput(**_payload(1500.0))
     assert parsed.geometry.drainage_radius_ft == 1500.0
     assert RadialCurveInput(**_payload(None)).geometry.drainage_radius_ft is None
 
 
-# --------------------------------------------------------------------------
-# 2. RadialCurveMaster.output_mode -- a fonte unica da decisao
-# --------------------------------------------------------------------------
 def test_output_mode_pvbt_when_drainage_radius_set():
     assert _master(1500.0).output_mode == "pvbt"
-    assert _master(1e-3).output_mode == "pvbt"  # qualquer positivo
+    assert _master(1e-3).output_mode == "pvbt"
 
 
 def test_output_mode_volume_when_no_drainage_radius():
     assert _master(None).output_mode == "volume"
-    assert _master(0.0).output_mode == "volume"    # 0 nao e raio valido
-    assert _master(-10.0).output_mode == "volume"  # nem negativo
+    assert _master(0.0).output_mode == "volume"
+    assert _master(-10.0).output_mode == "volume"
 
 
-# --------------------------------------------------------------------------
-# 3. a rota (linha exata do bug: pvbtRadialCurve.py return) nos DOIS modos.
-#    item 4 do escopo -- "testar os dois modos: com e sem drainage_radius".
-# --------------------------------------------------------------------------
 def test_route_returns_volume_without_drainage_radius():
     result = calculate_pvbt_radial(RadialCurveInput(**_payload(None)))
     assert result["output_mode"] == "volume"
-    # contrato ainda valida e as curvas continuam vindo (volume mode NAO
-    # zera pvbtpoints -- so muda qual coluna o front mostra)
     RadialCurveOutput(**result)
     assert len(result["curves"]) == 2
     assert result["curves"][0]["acidvolumepoints"] is not None

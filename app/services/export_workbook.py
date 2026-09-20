@@ -30,25 +30,12 @@ BORDER_COLOR = "#B0C4DE"
 
 IMAGE_TARGET_WIDTH_PX = 480
 RESUMO_IMAGE_TARGET_WIDTH_PX = IMAGE_TARGET_WIDTH_PX
-# Excel usa 96 dpi como referencia pra "escala 1.0" -- os PNGs do figure
-# pack saem a 300 dpi (dpi=300 no export_plots.py), entao a largura exibida
-# por padrao (x_scale=1.0) ja e menor que a largura em pixels do arquivo.
 DEFAULT_DPI = 96.0
-# Coluna J (0-indexed 9) -- pedido explicito, fixo em toda aba de dados
-# (Sim/Design/Skin) independente do numero de colunas da tabela, pra a
-# imagem ficar alinhada ao rolar entre abas. Titulo ocupa a linha 2
-# (0-indexed 1); imagem vai uma linha abaixo dele (0-indexed 2).
 IMAGE_ANCHOR_COL = 9
 IMAGE_TITLE_ROW = 1
 IMAGE_ANCHOR_ROW = IMAGE_TITLE_ROW + 1
-# Altura de linha padrao do Excel (~15pt) em pixels, usada so pra estimar
-# quantas linhas pular entre figuras na aba "Resumo graficos".
 DEFAULT_ROW_HEIGHT_PX = 20
-# Altura (em pontos) da linha do titulo da figura -- pedido explicito.
 IMAGE_TITLE_ROW_HEIGHT = 24
-# Largura de coluna (unidade Excel) fixada nas colunas que o titulo mescla,
-# pra o calculo de quantas colunas cobrir ~N px ser previsivel: nessa
-# largura, 1 coluna ~= 69 px (Calibri 11, largura padrao do Excel).
 TITLE_COLUMN_WIDTH_UNITS = 9.14
 TITLE_COLUMN_WIDTH_PX = 69
 
@@ -227,8 +214,6 @@ def _write_figure_title(ws, fmts: "_Formats", row: int, col: int, span_cols: int
         ws.write(row, col, text, fmts.section_header)
 
 
-# --- Simulation --------------------------------------------------------
-
 SIM_HEADER = ["q0 [gal/(ft.min)]", "V_A [gal/ft]", "iv [m/s]", "wv [m/s]", "dv [m/s]", "1/Da", "tbt [s]", "Nota"]
 
 
@@ -298,8 +283,6 @@ def _append_simulation_sheets(wb, fmts, curves: list[RadialCurveResult], show_va
         _write_simple_sheet(wb, fmts, name, SIM_HEADER, rows, highlight, (0, 6), image_png=plot,
                              image_title="Simulation Chart")
 
-
-# --- Design Plot ---------------------------------------------------------
 
 DESIGN_HEADER = ["L [ft]", "q_opt [gal/(ft.min)]", "V_opt [gal/ft]", "tbt [min]", "Temperatura [K]", "Nota"]
 
@@ -383,8 +366,6 @@ def _append_design_sheets(wb, fmts, design_series: list[DesignPlotSeries], payzo
                              image_title="Design Plot")
 
 
-# --- Skin ------------------------------------------------------------------
-
 SKIN_HEADER = ["V_A [gal/ft]", "skin", "comprimento [ft]", "Nota"]
 
 
@@ -421,8 +402,6 @@ def _append_skin_sheets(wb, fmts, skin_series: dict, target_skin: Optional[float
         _write_simple_sheet(wb, fmts, name, SKIN_HEADER, rows, {target_idx}, (0, 2), image_png=plot,
                              image_title="Skin Evolution")
 
-
-# --- Inputs ------------------------------------------------------------------
 
 def _build_inputs_rows(req: RadialExportRequest) -> list[list]:
     inp = req.inputs
@@ -476,8 +455,6 @@ def _write_inputs_sheet(wb, fmts, req: RadialExportRequest):
     ws.set_column(1, 1, 24)
     ws.freeze_panes(1, 0)
 
-
-# --- Figuras combinadas (respeitam chips ativos / limites, se enviados) ----
 
 def generate_all_figures(req: RadialExportRequest, size: str = "single") -> dict[str, bytes]:
     """Devolve {nome_estavel: png_bytes} -- individuais (todas as curvas,
@@ -578,13 +555,9 @@ def _write_combined_figures_sheet(wb, fmts: _Formats, req: RadialExportRequest):
         displayed_height_px = _insert_scaled_image(
             ws, png, row=row, col=0, target_width_px=RESUMO_IMAGE_TARGET_WIDTH_PX,
         )
-        # linhas ocupadas pela altura exibida + 3 linhas de folga antes da
-        # proxima figura (titulo incluso), pra nao sobrepor.
         rows_needed = math.ceil(displayed_height_px / DEFAULT_ROW_HEIGHT_PX) + 3
         row += rows_needed
 
-
-# --- entry point -------------------------------------------------------
 
 def build_workbook(req: RadialExportRequest, include_images: bool = True) -> bytes:
     """include_images=False monta a variante "somente tabelas": sem a aba

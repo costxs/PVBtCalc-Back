@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import pvbtPoint, pvbtCurve, getParameters, auth, optAnalitical, pvbtRadialCurve, skinEvolution, designPlot, exportRadial
+from app.routes import pvbtPoint, pvbtCurve, getParameters, auth, optAnalitical, pvbtRadialCurve, skinEvolution, designPlot, exportRadial, exportLinear
 from app.dependencies import setup_middlewares
 app = FastAPI(title="Meu Projeto FastAPI")
 setup_middlewares(app)
@@ -12,6 +12,7 @@ app.include_router(pvbtRadialCurve.router)
 app.include_router(skinEvolution.router)
 app.include_router(designPlot.router)
 app.include_router(exportRadial.router)
+app.include_router(exportLinear.router)
 
 @app.get("/")
 def home():

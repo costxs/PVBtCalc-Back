@@ -27,7 +27,6 @@ from app.services.PVBTradialFunc import (  # noqa: E402
 )
 from app.services.units import flowrate_to_m3s  # noqa: E402
 
-# parametros de acido fixos (HCl c/ inibidor, mesmos do harness do modulo)
 ACID = dict(a=5.10e-4, b=35.1, n=0.65, k0=2.43e6, Dm=3.24e-9, C_Ao=0.15, X=0.5417)
 
 
@@ -94,11 +93,8 @@ def _case(name, rw_in, h_ft, phi, target_ft, sweep_bbl_min):
 
 
 def test_no_edge_pinning():
-    # Caso que ANTES estourava: geometria de campo + alvo longo empurra o
-    # otimo real (~1.08e-2 m3/s) para cima do teto chumbado antigo (1e-2).
     geo, lam, q_true = _case("campo/alvo-longo", 6, 200, 0.30, 50, (0.1, 5))
 
-    # --- o guard tem dente: o bracket FIXO antigo realmente encosta na borda ---
     def V(q):
         return _acid_volume(geo, lam, q)
     r_old = minimize_scalar(V, bounds=(1e-9, 1e-2), method="bounded",
@@ -113,7 +109,6 @@ def test_no_edge_pinning():
         "esperado: bracket fixo antigo NAO acha o minimo real"
     )
 
-    # casos que ja convergiam continuam convergindo (nao quebrar o que funciona)
     _case("core-pequeno", 1.5, 1, 0.15, 5, (0.1, 5))
     _case("campo/medio", 4, 50, 0.20, 10, (0.1, 5))
 
@@ -126,12 +121,9 @@ def test_widen_has_physical_ceiling():
     lam = target_to_lambda(50.0, "length", geo.beta, geo.L)
     model = _model(geo, 1e-3)
 
-    # janela inicial cujo minimo real (~1.06e-2) esta ACIMA -- forcamos o
-    # teto fisico logo acima da janela: o alargamento pra cima deve bater
-    # no teto e levantar ValueError, nao devolver a borda.
     saved = PVBtRadial.Q_SEARCH_CEIL_M3S
     try:
-        PVBtRadial.Q_SEARCH_CEIL_M3S = 3e-3  # abaixo do otimo real
+        PVBtRadial.Q_SEARCH_CEIL_M3S = 3e-3
         raised = False
         try:
             model.optimum_flowrate(lam, 1e-4, 1e-3)
@@ -144,8 +136,6 @@ def test_widen_has_physical_ceiling():
     finally:
         PVBtRadial.Q_SEARCH_CEIL_M3S = saved
 
-    # e o consumidor (RadialCurveMaster) degrada em vez de estourar 500
-    # quando optimum_flowrate levanta ValueError (curva sem minimo fisico).
     from app.services.PVBTfunc import AcidType
     from app.services.PVBTradialFunc import RadialCurveMaster
     from app.services.units import flowrate_to_m3s

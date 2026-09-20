@@ -51,16 +51,13 @@ def test_radial_core_proportionality():
     m_ind = PVBtRadial(geo, flowrate_m3s=1e-4, f=1.00, **acid_kwargs)
     m_edw = PVBtRadial(geo, flowrate_m3s=1e-4, f=0.52, **acid_kwargs)
 
-    # 1. q_opt identico
     q_opt_ind, v_opt_ind = m_ind.optimum_flowrate(lam, q_lo, q_hi)
     q_opt_edw, v_opt_edw = m_edw.optimum_flowrate(lam, q_lo, q_hi)
     
     assert np.isclose(q_opt_ind, q_opt_edw, rtol=1e-5), "q_opt deve ser identico (f cancela na derivada)"
 
-    # 2. V_A exatamente 0.52x
     assert np.isclose(v_opt_edw / v_opt_ind, 0.52, rtol=1e-5), "V_A deve escalar exatamente por 0.52"
 
-    # 3. t_bt exatamente 0.52x
     m_opt_ind = PVBtRadial(geo, flowrate_m3s=q_opt_ind, f=1.00, **acid_kwargs)
     m_opt_edw = PVBtRadial(geo, flowrate_m3s=q_opt_edw, f=0.52, **acid_kwargs)
     tbt_ind = m_opt_ind.time_to_breakthrough_s(lam)
@@ -89,18 +86,15 @@ def test_simulation_curves_proportionality():
     curves_edw = master_edw.build_curves("length", [5.0, 10.0], 1e-5, 0.1, 10)
 
     for ci, ce in zip(curves_ind, curves_edw):
-        # q_opt
         assert np.isclose(
             ci["metadata"]["q_opt_gal_ft_min"],
             ce["metadata"]["q_opt_gal_ft_min"],
             rtol=1e-5
         )
-        # V_A sweep
         v_ind = [x for x in ci["acidvolumepoints"] if x is not None]
         v_edw = [x for x in ce["acidvolumepoints"] if x is not None]
         for vi, ve in zip(v_ind, v_edw):
             assert np.isclose(ve / vi, 0.52, rtol=1e-5)
-        # t_bt sweep
         t_ind = [x for x in ci["timetobt"] if x is not None]
         t_edw = [x for x in ce["timetobt"] if x is not None]
         for ti, te in zip(t_ind, t_edw):
@@ -150,15 +144,7 @@ def test_design_plot_proportionality():
     dp_ind = master_ind.generate_design_plot([297.0, 338.0], 1e-5, 0.1, "length", [15.0], steps=10)
     dp_edw = master_edw.generate_design_plot([297.0, 338.0], 1e-5, 0.1, "length", [15.0], steps=10)
 
-    # As series de Indiana e Edwards White tem comprimentos DIFERENTES de proposito:
-    # o teto de 1000 gal/ft e fixo e o volume de Edwards e 0.52x o de Indiana no
-    # mesmo comprimento, entao Edwards so atinge o teto mais tarde (297 K: Indiana
-    # para em 11.92 ft com 1000 gal/ft, Edwards esta em 520 e segue ate 13.10 ft).
-    # A 338 K ambas param bem antes: temperatura maior aumenta o consumo de acido.
-    # Por isso NAO se exige igualdade de tamanho; compara-se o prefixo comum, e o
-    # piso abaixo impede que uma serie encurtada por regressao passe despercebida
-    # (zip nao tem piso: com 2 pontos, compararia 2 pontos e ficaria verde).
-    min_points = {297.0: 47, 338.0: 21}  # prefixo comum medido em 2026-09-18
+    min_points = {297.0: 47, 338.0: 21}
 
     assert len(dp_ind["series"]) == len(dp_edw["series"]) == len(min_points)
     for si, se in zip(dp_ind["series"], dp_edw["series"]):

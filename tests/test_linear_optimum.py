@@ -45,27 +45,21 @@ def test_apendice_a_q_opt():
 
 def test_validity_window_contract():
     p = _apendice_a_params()
-    # sweep sintetico em cm3/min, com pontos dentro E fora da janela
-    # (q_opt ~1.7054 => janela ~[0.1705, 17.054])
     flowrates = [0.05, 0.20, 1.7054, 5.0, 30.0]
     within, metadata = linear_validity_window(flowrates, **p)
 
     assert metadata is not None
     assert len(within) == len(flowrates)
     assert all(isinstance(v, bool) for v in within)
-    # nao virou objeto-por-ponto (SoA, nao AoS)
     assert not any(isinstance(v, dict) for v in within)
 
-    # metadata em cm3/min (nao m3/s cru: q_opt seria ~2.8e-8 se fosse m3/s)
     assert abs(metadata["q_opt_cm3_min"] - 1.7054) < 1e-3, metadata
-    # janela = q_opt/10 .. q_opt*10
     assert abs(metadata["validity_min_cm3_min"] - metadata["q_opt_cm3_min"] / 10.0) < 1e-12
     assert abs(metadata["validity_max_cm3_min"] - metadata["q_opt_cm3_min"] * 10.0) < 1e-12
 
     lo, hi = metadata["validity_min_cm3_min"], metadata["validity_max_cm3_min"]
     for q, flag in zip(flowrates, within):
         assert flag == (lo <= q <= hi), (q, flag)
-    # exercita os dois lados da janela
     assert within[0] is False and within[-1] is False
     assert any(within)
     print(f"[janela] q_opt={metadata['q_opt_cm3_min']:.4f}  "
@@ -82,7 +76,6 @@ def test_degradacao_bracket_sem_raiz():
     p = _apendice_a_params()
     p["lc"] = 1e-12
 
-    # 1. a causa raiz e mesmo brentq sem raiz no bracket
     raised = False
     try:
         optimum_flowrate_linear(**p)
@@ -90,7 +83,6 @@ def test_degradacao_bracket_sem_raiz():
         raised = True
     assert raised, "esperava ValueError de brentq (bracket da Eq. 34 sem raiz da Eq. 33)"
 
-    # 2. o consumidor degrada em vez de propagar a excecao
     flowrates = [0.05, 0.5, 5.0]
     within, metadata = linear_validity_window(flowrates, **p)
     assert metadata is None

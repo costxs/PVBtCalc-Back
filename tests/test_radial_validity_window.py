@@ -35,7 +35,6 @@ _NUMERIC_ARRAYS = (
     "flowratepoints", "pvbtpoints", "acidvolumepoints", "insterticialvelocity",
     "ida", "volumetobt", "timetobt", "wormholevelocity", "darcyvelocity",
 )
-# nulaveis por ponto onde status[i] == "clipped" (ver schemas.RadialCurveResult)
 _NULLABLE_AT_CLIPPED = ("pvbtpoints", "acidvolumepoints", "volumetobt", "timetobt")
 
 
@@ -76,28 +75,21 @@ def test_validity_window_contract():
         steps=steps,
     )
 
-    # 1. valida contra o response_model real da rota
     RadialCurveOutput(output_mode="pvbt", curves=curves, parameters=master.get_adjusted_parameters())
 
     for c in curves:
         n = len(c["flowratepoints"])
-        # 2. SoA: within_validity_range e paralelo a status/flowratepoints
         assert len(c["within_validity_range"]) == n == len(c["status"]), c["target_label"]
         assert all(isinstance(v, bool) for v in c["within_validity_range"])
         assert "metadata" in c and "within_validity_range" in c
-        # nao virou objeto-por-ponto
         assert not any(isinstance(v, dict) for v in c["within_validity_range"])
 
         md = c["metadata"]
         assert md is not None, f"{c['target_label']}: metadata None inesperado neste caso"
-        # 3. metadata em gal/(ft.min) (nao m3/s cru: q_opt tipico << 1e-2 se fosse m3/s)
         q_opt_m3s = _display_to_m3s(md["q_opt_gal_ft_min"], master.payzone_thickness_ft)
-        # 4. validity_min = q_opt/10, validity_max = q_opt*10 -- razao e
-        # invariante de unidade, entao a checagem vale igual em gal/(ft.min)
         assert abs(md["validity_min_gal_ft_min"] - md["q_opt_gal_ft_min"] / 10.0) < 1e-12
         assert abs(md["validity_max_gal_ft_min"] - md["q_opt_gal_ft_min"] * 10.0) < 1e-12
 
-        # 5. flag coerente com a janela, ponto a ponto
         vmin = _display_to_m3s(md["validity_min_gal_ft_min"], master.payzone_thickness_ft)
         vmax = _display_to_m3s(md["validity_max_gal_ft_min"], master.payzone_thickness_ft)
         for fr_gal, flag in zip(c["flowratepoints"], c["within_validity_range"]):
@@ -110,8 +102,6 @@ def test_validity_window_contract():
               f"janela=[{md['validity_min_gal_ft_min']:.4f}, {md['validity_max_gal_ft_min']:.4f}]  "
               f"flags={c['within_validity_range']}")
 
-    # sanidade: pelo menos um caso com ponto fora da janela (senao o teste
-    # nao exercita a marcacao)
     assert any(not all(c["within_validity_range"]) for c in curves)
 
 
@@ -122,11 +112,9 @@ def test_sweep_starting_at_zero_window():
     (build_curves, antes do linspace) -- via floor_zero_flow."""
     fmax = flowrate_to_m3s(5.0, "bbl_min")
 
-    # 1. a fonte unica da decisao
     assert floor_zero_flow(0.0, fmax) == fmax * 1e-9
-    assert floor_zero_flow(123.0, fmax) == 123.0  # nao-zero passa direto
+    assert floor_zero_flow(123.0, fmax) == 123.0
 
-    # 2. janela de busca de q_opt nao vai a zero
     q_lo, q_hi = opt_search_window(0.0, fmax)
     assert q_lo > 0.0, "q_lo=0 quebra a busca em escala log"
     assert abs(q_lo - fmax * 1e-9) < 1e-24, (q_lo, fmax * 1e-9)
@@ -141,25 +129,19 @@ def test_sweep_starting_at_zero_window():
     assert c["metadata"] is not None
     assert len(c["within_validity_range"]) == len(c["flowratepoints"]) == 5
 
-    # 3. o 1o ponto do sweep NAO e q=0 -- e o piso, entao nada de inf/nan
     first_gal = c["flowratepoints"][0]
     assert first_gal > 0.0, "sweep ainda comeca em q=0"
     assert abs(_display_to_m3s(first_gal, master.payzone_thickness_ft) - fmax * 1e-9) < 1e-24
     _assert_no_inf_nan(c)
 
-    # 4. no ponto do piso o expoente clipa em LIMITE_EXP -> o valor extremo
-    #    (~expm1(700)/K, a poucas ordens do teto do float64) vira None.
-    #    status marca "clipped"; within_validity_range nao muda.
     assert c["status"][0] == "clipped"
     assert c["pvbtpoints"][0] is None
     assert c["acidvolumepoints"][0] is None
     assert c["volumetobt"][0] is None
     assert c["timetobt"][0] is None
-    # pontos "ok" seguem numericos
     assert c["status"][-1] == "ok"
     assert isinstance(c["timetobt"][-1], float)
 
-    # 5. piso << q_opt/10 => primeiro ponto continua fora da janela de validade
     assert c["within_validity_range"][0] is False
     print(f"[sweep-from-0] 1o ponto={first_gal:.3e} gal/(ft.min) (= fmax*1e-9 em m3/s)  "
           f"status[0]={c['status'][0]}  timetobt[0]={c['timetobt'][0]}  "
