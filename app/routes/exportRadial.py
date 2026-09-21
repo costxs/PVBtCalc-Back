@@ -1,4 +1,5 @@
 import io
+import re
 import zipfile
 from datetime import date
 from typing import Literal
@@ -30,10 +31,11 @@ def export_radial_workbook(data: RadialExportRequest, include_images: bool = Que
 def export_radial_figures(data: RadialExportRequest, size: Literal["single", "double"] = Query("single")):
     figures = ewb.generate_all_figures(data, size=size)
 
+    sim_id = re.sub(r'[\\/:*?"<>|\s]+', "_", str(data.inputs.simulation_id or "---"))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for stem, png_bytes in figures.items():
-            zf.writestr(f"{stem}.png", png_bytes)
+            zf.writestr(f"Radial_{sim_id}_{stem}.png", png_bytes)
     buf.seek(0)
 
     filename = f"PVBtCalc_Radial_Figures_{data.inputs.simulation_id or '---'}_{date.today().isoformat()}.zip"

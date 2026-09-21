@@ -366,6 +366,56 @@ def _append_design_sheets(wb, fmts, design_series: list[DesignPlotSeries], payzo
                              image_title="Design Plot")
 
 
+# Optimum Analysis (radial). Espelho de PVBtCalc/src/tools/analysisTable.ts --
+# linhas e Nota travadas por shared-fixtures/radial_analysis_table_cases.json.
+ANALYSIS_META = {
+    "temperature": ("temperatura", "K"),
+    "porosity": ("porosidade", "fração"),
+    "acid_concentration": ("concentração", "w/w"),
+    "wellbore_diameter": ("diâmetro do poço", "in"),
+    "payzone_thickness": ("espessura", "ft"),
+}
+
+
+def _fmt_num(x: float) -> str:
+    return format(x, ".6g")
+
+
+def _analysis_rows(a) -> list[dict]:
+    from app.services.PVBTradialFunc import T_CALIBRATED_K
+    _, unit = ANALYSIS_META.get(a.sweep_param, (a.sweep_param, ""))
+    outside = set(a.outside_calibrated_range)
+    rows = []
+    for x, q, v in zip(a.sweep_values, a.optimum_rate, a.optimum_volume):
+        notes = []
+        if x in outside:
+            notes.append(f"Fora da faixa calibrada ({T_CALIBRATED_K[0]:g}–{T_CALIBRATED_K[1]:g} K)")
+        rows.append({"x": x, "q_opt": q, "v_opt": v, "tbt_min": (v / q) if q else None, "notes": notes})
+    if a.has_clipped_volume and a.first_clipped_value is not None and rows:
+        rows[-1]["notes"].append(
+            f"Série truncada — {_fmt_num(a.first_clipped_value)} {unit} excede o limite de 1000 gal/ft")
+    for x in a.skipped_values:
+        rows.append({"x": x, "q_opt": None, "v_opt": None, "tbt_min": None,
+                     "notes": ["Sem ótimo interior — ponto omitido"]})
+    rows.sort(key=lambda r: r["x"])
+    for r in rows:
+        r["nota"] = "; ".join(r["notes"])
+    return rows
+
+
+def _append_analysis_sheet(wb, fmts, a):
+    rows = _analysis_rows(a)
+    if not rows:
+        return
+    label, unit = ANALYSIS_META.get(a.sweep_param, (a.sweep_param, ""))
+    header = [f"{label} [{unit}]", "q_opt [gal/(ft.min)]", "V_opt [gal/ft]", "tbt [min]", "Nota"]
+    sheet_rows = [[r["x"], r["q_opt"], r["v_opt"], r["tbt_min"], r["nota"]] for r in rows]
+    highlight = {i for i, r in enumerate(rows) if r["nota"]}
+    used: set = set()
+    name = _dedupe_sheet_name(_sanitize_sheet_name(f"Analysis {label}"), used)
+    _write_simple_sheet(wb, fmts, name, header, sheet_rows, highlight, (0, 3))
+
+
 SKIN_HEADER = ["V_A [gal/ft]", "skin", "comprimento [ft]", "Nota"]
 
 
@@ -580,6 +630,9 @@ def build_workbook(req: RadialExportRequest, include_images: bool = True) -> byt
 
     if req.skin_series:
         _append_skin_sheets(wb, fmts, req.skin_series, req.options.target_skin, include_images=include_images)
+
+    if req.analysis is not None:
+        _append_analysis_sheet(wb, fmts, req.analysis)
 
     wb.close()
     return buf.getvalue()

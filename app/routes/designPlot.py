@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from app.schemas import DesignPlotInput, DesignPlotOutput
 from app.services.PVBTfunc import AcidType
-from app.services.PVBTradialFunc import RadialCurveMaster
+from app.services.PVBTradialFunc import RadialCurveMaster, T_CALIBRATED_K
 from app.services.units import flowrate_to_m3s
 from app.core.security import get_current_user
 
@@ -30,4 +30,8 @@ def generate_design_plot(data: DesignPlotInput):
         target_mode=data.radial_targets.target_mode,
         targets=data.radial_targets.targets
     )
+    result["outside_calibrated_range"] = [
+        t for t in data.temperatures_to_compare
+        if not (T_CALIBRATED_K[0] <= t <= T_CALIBRATED_K[1])
+    ]
     return result

@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, model_validator, field_validator
 from typing import Dict, List, Optional, Any
+from app.services.PVBTradialFunc import T_CALIBRATED_K
 class PVBtInputPoint(BaseModel):
     acid_type: str
     acid_concentration: float
@@ -98,7 +99,7 @@ class RadialSystem(BaseModel):
     porosity: float
     acid_system: str
     acid_concentration: float
-    temperature_k: float = Field(..., ge=283.0, le=478.0)
+    temperature_k: float = Field(..., ge=T_CALIBRATED_K[0], le=T_CALIBRATED_K[1])
 
 class RadialGeometryInput(BaseModel):
     wellbore_radius_in: float
@@ -123,6 +124,17 @@ class RadialCurveInput(BaseModel):
 
 class DesignPlotInput(RadialCurveInput):
     temperatures_to_compare: List[float]
+
+    # Mesma politica do sweep do Optimum Analysis: so <= 0 K e rejeitado (divisao
+    # por zero em exp(-2270/T)); fora de T_CALIBRATED_K aceita e sinaliza em
+    # DesignPlotOutput.outside_calibrated_range.
+    @field_validator("temperatures_to_compare")
+    @classmethod
+    def _temps_above_absolute_zero(cls, v):
+        bad = [t for t in v if not t > 0.0]
+        if bad:
+            raise ValueError(f"temperatures_to_compare must be above absolute zero (> 0 K), got {bad}")
+        return v
 
 # Janela de validade da vazao (Fase 2, unidade trocada para gal/(ft.min) na
 # Fase 8): ja convertido de m3/s via app.services.units.flowrate_to_display
@@ -169,7 +181,7 @@ class RadialCurveOutput(BaseModel):
 class SkinEvolutionInput(BaseModel):
     acid_type: str
     acid_concentration: float
-    temperature_k: float = Field(..., ge=283.0, le=478.0)
+    temperature_k: float = Field(..., ge=T_CALIBRATED_K[0], le=T_CALIBRATED_K[1])
     core_porosity: float
     wellbore_radius_in: float
     payzone_thickness_ft: float
@@ -185,6 +197,7 @@ class DesignPlotSeries(BaseModel):
 class DesignPlotOutput(BaseModel):
     series: List[DesignPlotSeries]
     has_clipped_volume: bool = False
+    outside_calibrated_range: List[float] = []
 
 
 class SkinEvolutionPoint(BaseModel):
@@ -232,11 +245,23 @@ class RadialExportOptions(BaseModel):
     skin_y_limits: Optional[AxisLimitsInput] = None
 
 
+class RadialAnalysisSeries(BaseModel):
+    sweep_param: str
+    sweep_values: List[float]
+    optimum_rate: List[float]
+    optimum_volume: List[float]
+    has_clipped_volume: bool = False
+    first_clipped_value: Optional[float] = None
+    skipped_values: List[float] = []
+    outside_calibrated_range: List[float] = []
+
+
 class RadialExportRequest(BaseModel):
     inputs: ExportInputs
     curves: List[RadialCurveResult]
     design_series: List[DesignPlotSeries] = []
     skin_series: Dict[str, List[SkinEvolutionPoint]] = {}
+    analysis: Optional[RadialAnalysisSeries] = None
     options: RadialExportOptions = RadialExportOptions()
 
 
@@ -275,3 +300,40 @@ class LinearExportRequest(BaseModel):
     curves: List[LinearModelCurve] = []
     experimental_curves: List[LinearExperimentalCurve] = []
     options: LinearExportOptions = LinearExportOptions()
+
+
+class RadialOptimumSweepInput(BaseModel):
+    sweep_param: str
+    minimum: float
+    maximum: float
+    steps: int = 30
+    target_mode: str = "length"
+    target: float
+    acid_system: str
+    acid_concentration: float
+    rock_type: str
+    porosity: float
+    temperature_k: float
+    wellbore_radius_in: float
+    payzone_thickness_ft: float
+    flow_min_bbl_min: float
+    flow_max_bbl_min: float
+
+    @model_validator(mode="after")
+    def _check_sweep(self):
+        from app.services.radial_optimum_sweep import validate_sweep, UI_SWEEP_PARAMS
+        if self.sweep_param not in UI_SWEEP_PARAMS:
+            raise ValueError(f"sweep_param: {self.sweep_param!r} is not offered; use one of {UI_SWEEP_PARAMS}")
+        validate_sweep(self.sweep_param, self.minimum, self.maximum, self.steps)
+        return self
+
+
+class RadialOptimumSweepOutput(BaseModel):
+    sweep_param: str
+    sweep_values: List[float]
+    optimum_rate: List[float]
+    optimum_volume: List[float]
+    has_clipped_volume: bool
+    skipped_values: List[float]
+    outside_calibrated_range: List[float] = []
+    first_clipped_value: Optional[float] = None

@@ -223,6 +223,12 @@ def opt_search_window(flow_min_m3s, flow_max_m3s, scale=OPT_SEARCH_SCALE):
     return q_lo, q_hi
 
 
+# Faixa de temperatura (K) em que as correlacoes do modelo radial foram calibradas.
+# UNICA definicao: schemas.py (RadialSystem, SkinEvolutionInput), o sweep do
+# Optimum Analysis e (espelhado em TS) SimuCard.tsx/sweepValidation.ts usam isto.
+T_CALIBRATED_K = (283.0, 478.0)
+
+
 def diffusion_coefficient(temperature_k, acid_concentration):
     """Mesma formula de services/PVBTfunc.py:PVBtSetup.SetDifusionCoeficient,
     duplicada aqui (nao importada) para manter o radial desacoplado do
