@@ -140,8 +140,8 @@ def test_workbook_sheet_order_and_names(export_request):
     wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes))
 
     expected = [
-        "Inputs", "Resumo gráficos",
-        "Design 297 K", "Design 339 K", "Design 422 K",
+        "Inputs", "Chart Summary",
+        "Design 23.89 C", "Design 65.56 C", "Design 148.89 C",
         "Sim 5.00 ft", "Sim 10.00 ft", "Sim 15.00 ft", "Sim 20.00 ft",
         "Skin 0.8 bbl-min", "Skin 1.6 bbl-min", "Skin 3.2 bbl-min",
     ]
@@ -153,7 +153,7 @@ def test_workbook_freeze_panes_on_every_data_sheet(export_request):
     xlsx_bytes = ewb.build_workbook(export_request)
     wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes))
     for name in wb.sheetnames:
-        if name == "Resumo gráficos":
+        if name == "Chart Summary":
             continue
         assert wb[name].freeze_panes == "A2", f"{name} sem freeze panes"
 
@@ -164,7 +164,7 @@ def test_workbook_inputs_are_numeric_not_text(export_request):
     wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes))
     ws = wb["Inputs"]
     numeric_labels = {
-        "Acid Concentration (w/w)", "Porosity", "Temperature (K)", "Temperature (°C)",
+        "Acid Concentration (w/w)", "Porosity", "Temperature (°C)",
         "Wellbore Size (in) [diameter]", "Wellbore Radius (in)", "Payzone Thickness (ft)",
         "Flowrate Sweep Min (bbl/min)", "Flowrate Sweep Max (bbl/min)",
         "Flowrate Sweep Min (gal/(ft.min))", "Flowrate Sweep Max (gal/(ft.min))",
@@ -227,7 +227,7 @@ def test_workbook_image_display_width_and_summary_no_overlap(export_request):
         assert w == pytest.approx(ewb.IMAGE_TARGET_WIDTH_PX, abs=2), \
             f"largura exibida {w:.1f}px longe do alvo {ewb.IMAGE_TARGET_WIDTH_PX}px"
 
-    assert resumo_boxes, "nenhuma imagem encontrada no Resumo gráficos"
+    assert resumo_boxes, "nenhuma imagem encontrada no Chart Summary"
     for _, _, cx in resumo_boxes:
         w = cx / EMU_PER_PX
         assert w == pytest.approx(ewb.RESUMO_IMAGE_TARGET_WIDTH_PX, abs=2), \
@@ -235,22 +235,22 @@ def test_workbook_image_display_width_and_summary_no_overlap(export_request):
 
     resumo_boxes.sort(key=lambda b: b[0])
     for (y1, cy1, _), (y2, _, _) in zip(resumo_boxes, resumo_boxes[1:]):
-        assert y1 + cy1 <= y2, "figuras do Resumo gráficos se sobrepõem"
+        assert y1 + cy1 <= y2, "figuras do Chart Summary se sobrepõem"
 
 
 def test_workbook_include_images_false_drops_summary_and_media(export_request):
     """Variante "somente tabelas" (aba EXPORT, item opcional do pedido):
-    mesmas abas de dados, mesma formatacao, mas sem Resumo gráficos e sem
+    mesmas abas de dados, mesma formatacao, mas sem Chart Summary e sem
     nenhuma imagem embutida -- arquivo mais leve pra quem so quer os
     numeros."""
     import openpyxl
     xlsx_bytes = ewb.build_workbook(export_request, include_images=False)
     wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes))
 
-    assert "Resumo gráficos" not in wb.sheetnames
+    assert "Chart Summary" not in wb.sheetnames
     expected = [
         "Inputs",
-        "Design 297 K", "Design 339 K", "Design 422 K",
+        "Design 23.89 C", "Design 65.56 C", "Design 148.89 C",
         "Sim 5.00 ft", "Sim 10.00 ft", "Sim 15.00 ft", "Sim 20.00 ft",
         "Skin 0.8 bbl-min", "Skin 1.6 bbl-min", "Skin 3.2 bbl-min",
     ]
@@ -290,7 +290,7 @@ def test_workbook_figure_titles_replace_filename_with_formatted_bar(export_reque
 
     per_sheet_titles = {
         "Sim 5.00 ft": "Simulation Chart",
-        "Design 297 K": "Design Plot",
+        "Design 23.89 C": "Design Plot",
         "Skin 0.8 bbl-min": "Skin Evolution",
     }
     for sheet_name, expected_text in per_sheet_titles.items():
@@ -307,7 +307,7 @@ def test_workbook_figure_titles_replace_filename_with_formatted_bar(export_reque
         assert any(cell.coordinate in rng for rng in ws.merged_cells.ranges), \
             f"{sheet_name}: titulo nao esta numa celula mesclada"
 
-    ws_resumo = wb["Resumo gráficos"]
+    ws_resumo = wb["Chart Summary"]
     expected_resumo_titles = {
         "Simulation Chart",
         "Design Plot",
@@ -331,17 +331,17 @@ def test_workbook_design_plot_multi_target_highlights(export_request):
     xlsx_bytes = ewb.build_workbook(export_request)
     wb = openpyxl.load_workbook(io.BytesIO(xlsx_bytes))
 
-    ws297 = wb["Design 297 K"]
+    ws297 = wb["Design 23.89 C"]
     notes_297 = [c.value for c in ws297["F"][1:] if c.value]
     assert len(notes_297) == 4
 
-    ws339 = wb["Design 339 K"]
+    ws339 = wb["Design 65.56 C"]
     notes_339 = [c.value for c in ws339["F"][1:] if c.value]
-    assert any("15" in n and "20" in n and "não atingidos" in n for n in notes_339)
+    assert any("15" in n and "20" in n and "not reached" in n for n in notes_339)
 
-    ws422 = wb["Design 422 K"]
+    ws422 = wb["Design 148.89 C"]
     notes_422 = [c.value for c in ws422["F"][1:] if c.value]
-    assert any("10, 15 e 20" in n for n in notes_422)
+    assert any("10, 15 and 20" in n for n in notes_422)
 
 
 def test_workbook_values_match_source_curves(export_request):
@@ -361,7 +361,7 @@ def test_workbook_values_match_source_curves(export_request):
 
 EXPECTED_STEMS = {
     "simulation_5.00ft", "simulation_10.00ft", "simulation_15.00ft", "simulation_20.00ft", "simulation_all",
-    "design_297.04K", "design_338.71K", "design_422.04K", "design_all",
+    "design_23.89C", "design_65.56C", "design_148.89C", "design_all",
     "skin_0.8bblmin", "skin_1.6bblmin", "skin_3.2bblmin", "skin_all",
 }
 

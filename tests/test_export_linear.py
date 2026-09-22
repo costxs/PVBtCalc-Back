@@ -110,7 +110,7 @@ def test_exported_q_opt_equals_source_value(two_curves):
         notes = [r[8] for r in rows if r[8]]
         assert len(notes) == 1
         assert f"q_opt = {ewl.fmt_flow(q_opt)} cm³/min" in notes[0]
-        assert notes[0].startswith("PVBT mínimo desta simulação")
+        assert notes[0].startswith("Minimum PVBT of this simulation")
 
 
 def test_two_optima_are_kept_distinct(two_curves):
@@ -135,8 +135,8 @@ def test_edge_of_sweep_note_gives_true_q_opt():
     assert len(noted) == 1
     idx, note = noted[0]
     assert idx in (0, len(rows) - 1)
-    assert note == f"Mínimo na borda da faixa simulada; q_opt = {ewl.fmt_flow(q_opt)} cm³/min"
-    assert "PVBT mínimo desta simulação" not in note
+    assert note == f"Minimum at the edge of the simulated range; q_opt = {ewl.fmt_flow(q_opt)} cm³/min"
+    assert "Minimum PVBT of this simulation" not in note
     fig = ewl.build_linear_figure(LinearExportRequest(curves=[c]))
     ax = fig.axes[0]
     assert not [ln for ln in ax.lines if ln.get_marker() == "o" and list(ln.get_xdata())]
@@ -148,7 +148,7 @@ def test_no_metadata_degrades_without_q_opt():
     wb = build(LinearExportRequest(curves=[c]))
     ws = wb["Sim nometa"]
     s = summary_values(ws)
-    assert s["q_opt [cm³/min]"] == "não disponível"
+    assert s["q_opt [cm³/min]"] == "not available"
     _, rows = data_rows(ws)
     note = next(r[8] for r in rows if r[8])
     assert "q_opt" not in note
@@ -163,7 +163,7 @@ def test_experimental_sheet_present_and_bare(two_curves):
     got = [(ws.cell(r, 1).value, ws.cell(r, 2).value, ws.cell(r, 3).value) for r in range(2, 7)]
     assert got == [(exp.id, q, y) for q, y in zip(exp.flowratepoints, exp.pvbtpoints)]
     text = " ".join(str(c.value) for row in ws.iter_rows() for c in row if c.value is not None)
-    assert "Nota" not in text and "OPTIMUM SUMMARY" not in text
+    assert "Note" not in text and "OPTIMUM SUMMARY" not in text
     assert "Sim Exp" not in " ".join(wb.sheetnames)
 
 

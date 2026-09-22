@@ -28,6 +28,7 @@ import xlsxwriter
 
 from app.schemas import LinearExperimentalCurve, LinearExportRequest, LinearModelCurve
 from app.services import export_plots as ep
+from app.services import export_text as et
 from app.services.export_workbook import (
     RESUMO_IMAGE_TARGET_WIDTH_PX,
     _dedupe_sheet_name,
@@ -42,7 +43,7 @@ from app.services.export_workbook import (
 Q_UNIT = "cm³/min"
 
 SIM_HEADER = [
-    f"q0 [{Q_UNIT}]", "PVBt", "iv [m/s]", "1/Da", "wv [m/s]", "vbt [cm³]", "tbt [s]", "dv [m/s]", "Nota",
+    f"q0 [{Q_UNIT}]", "PVBt", "iv [m/s]", "1/Da", "wv [m/s]", "vbt [cm³]", "tbt [s]", "dv [m/s]", et.NOTE_HEADER,
 ]
 NUMERIC_COLS = (0, 7)
 EXP_HEADER = ["Curve ID", f"q0 [{Q_UNIT}]", "PVBt"]
@@ -98,10 +99,8 @@ def build_note(info: dict, i: int) -> str:
     a 1a/ultima, o otimo real esta fora da faixa varrida."""
     if i != info["min_idx"]:
         return ""
-    q_txt = f"; q_opt = {fmt_flow(info['q_opt'])} {Q_UNIT}" if info["q_opt"] is not None else ""
-    if info["is_border"]:
-        return f"Mínimo na borda da faixa simulada{q_txt}"
-    return f"PVBT mínimo desta simulação{q_txt}"
+    q_str = fmt_flow(info["q_opt"]) if info["q_opt"] is not None else None
+    return et.linear_note(info["is_border"], q_str, Q_UNIT)
 
 
 def build_model_rows(curve: LinearModelCurve) -> tuple[list[list], set[int], dict]:
@@ -130,7 +129,7 @@ def build_model_rows(curve: LinearModelCurve) -> tuple[list[list], set[int], dic
 
 def build_summary_rows(info: dict) -> list[tuple[str, object]]:
     """Bloco por curva: otimo exato primeiro, menor varrido separado."""
-    na = "não disponível"
+    na = et.NOT_AVAILABLE
     exact = info["q_opt"] is not None
     return [
         (f"q_opt [{Q_UNIT}]", info["q_opt"] if exact else na),
@@ -211,7 +210,6 @@ def _build_inputs_rows(curves: list[LinearModelCurve]) -> list[tuple[str, list]]
         ("Acid Concentration (w/w)", col(lambda c: blank_if_none(c.acid_concentration))),
         ("Porosity", col(lambda c: blank_if_none(c.porosity))),
         ("Temperature (°C)", col(lambda c: blank_if_none(c.temperature_c))),
-        ("Temperature (K)", col(lambda c: "" if c.temperature_c is None else round(c.temperature_c + 273.15, 2))),
         ("Core Length (in)", col(lambda c: blank_if_none(c.core_length_in))),
         ("Core Diameter (in)", col(lambda c: blank_if_none(c.core_diameter_in))),
         (f"Flowrate Sweep Min ({Q_UNIT})", col(lambda c: min(c.flowratepoints) if c.flowratepoints else "")),

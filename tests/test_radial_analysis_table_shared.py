@@ -41,9 +41,9 @@ def test_workbook_contains_analysis_sheet():
     xlsx = ew.build_workbook(req, include_images=False)
     z = zipfile.ZipFile(io.BytesIO(xlsx))
     wb_xml = z.read("xl/workbook.xml").decode("utf-8")
-    assert "Analysis temperatura" in wb_xml, wb_xml
+    assert "Analysis Temperature" in wb_xml, wb_xml
     shared = z.read("xl/sharedStrings.xml").decode("utf-8")
-    assert "Sem ótimo interior" in shared and "Série truncada" in shared
+    assert "No interior optimum" in shared and "Series truncated" in shared
     assert "tbt [min]" in shared
 
 

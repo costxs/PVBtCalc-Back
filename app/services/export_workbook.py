@@ -21,6 +21,8 @@ import xlsxwriter
 
 from app.schemas import DesignPlotSeries, RadialCurveResult, RadialExportRequest
 from app.services import export_plots as ep
+from app.services import export_text as et
+from app.services.temperature import kelvin_to_celsius, round_celsius, T_CALIBRATED_C
 
 SECTION_HEADER_BG = "#1F4E78"
 COL_HEADER_BG = "#2F75B5"
@@ -70,16 +72,6 @@ def _fmt_target(t: float) -> str:
         return str(int(t))
     s = f"{t:.2f}".rstrip('0').rstrip('.')
     return s
-
-
-def _join_pt(items: list[str]) -> str:
-    if not items:
-        return ''
-    if len(items) == 1:
-        return items[0]
-    if len(items) == 2:
-        return f"{items[0]} e {items[1]}"
-    return f"{', '.join(items[:-1])} e {items[-1]}"
 
 
 class _Formats:
@@ -214,9 +206,6 @@ def _write_figure_title(ws, fmts: "_Formats", row: int, col: int, span_cols: int
         ws.write(row, col, text, fmts.section_header)
 
 
-SIM_HEADER = ["q0 [gal/(ft.min)]", "V_A [gal/ft]", "iv [m/s]", "wv [m/s]", "dv [m/s]", "1/Da", "tbt [s]", "Nota"]
-
-
 def _build_simulation_rows(curve: RadialCurveResult) -> tuple[list[list], set[int]]:
     n = len(curve.flowratepoints)
     min_idx, min_v = -1, float("inf")
@@ -233,12 +222,7 @@ def _build_simulation_rows(curve: RadialCurveResult) -> tuple[list[list], set[in
     for i in range(n):
         note = ""
         if i == min_idx:
-            if is_border:
-                note = (f"Mínimo na borda da faixa simulada; q_opt = {q_opt_str} gal/(ft·min)"
-                        if q_opt_str else "Mínimo na borda da faixa simulada")
-            else:
-                note = (f"V_A mínimo desta simulação; q_opt = {q_opt_str} gal/(ft·min)"
-                        if q_opt_str else "V_A mínimo desta simulação")
+            note = et.sim_note(is_border, q_opt_str)
         rows.append([
             curve.flowratepoints[i],
             curve.acidvolumepoints[i] if i < len(curve.acidvolumepoints) else None,
@@ -280,11 +264,8 @@ def _append_simulation_sheets(wb, fmts, curves: list[RadialCurveResult], show_va
             size="single", show_validity_band=show_validity_band,
         ) if include_images else None
         name = _dedupe_sheet_name(_simulation_sheet_name(c), used)
-        _write_simple_sheet(wb, fmts, name, SIM_HEADER, rows, highlight, (0, 6), image_png=plot,
+        _write_simple_sheet(wb, fmts, name, et.SIM_HEADER, rows, highlight, (0, 6), image_png=plot,
                              image_title="Simulation Chart")
-
-
-DESIGN_HEADER = ["L [ft]", "q_opt [gal/(ft.min)]", "V_opt [gal/ft]", "tbt [min]", "Temperatura [K]", "Nota"]
 
 
 def _design_rows_for_temp(series: DesignPlotSeries, payzone_thickness_ft: Optional[float]) -> list[dict]:
@@ -296,13 +277,15 @@ def _design_rows_for_temp(series: DesignPlotSeries, payzone_thickness_ft: Option
         q_opt = rate[i][0]
         v_opt = vol[i][0]
         rows.append({
-            "comprimento": rate[i][1],
+            "wormhole_length": rate[i][1],
             "q_opt": q_opt,
             "v_opt": v_opt,
             "tbt_min": (v_opt / q_opt) if q_opt else None,
-            "temperatura": series.temperature_k,
+            # Displayed in Celsius; series.temperature_k (Kelvin) still names the sheet
+            # ("Design 297 K") -- see PVBtCalc/docs/i18n-review.md for that known mismatch.
+            "temperature": round_celsius(series.temperature_k, 2),
         })
-    rows.sort(key=lambda r: r["comprimento"])
+    rows.sort(key=lambda r: r["wormhole_length"])
     return rows
 
 
@@ -316,8 +299,8 @@ def _append_design_sheets(wb, fmts, design_series: list[DesignPlotSeries], payzo
         rows = _design_rows_for_temp(series, payzone_thickness_ft)
         if not rows:
             continue
-        last_l = rows[-1]["comprimento"]
-        half_step = (last_l - rows[0]["comprimento"]) / (len(rows) - 1) / 2 if len(rows) > 1 else float("inf")
+        last_l = rows[-1]["wormhole_length"]
+        half_step = (last_l - rows[0]["wormhole_length"]) / (len(rows) - 1) / 2 if len(rows) > 1 else float("inf")
 
         notes_by_row: dict[int, list[str]] = {}
         highlight: set[int] = set()
@@ -326,13 +309,13 @@ def _append_design_sheets(wb, fmts, design_series: list[DesignPlotSeries], payzo
         for t in clean_targets:
             best_idx, best_diff = -1, float("inf")
             for i, r in enumerate(rows):
-                diff = abs(r["comprimento"] - t)
+                diff = abs(r["wormhole_length"] - t)
                 if diff < best_diff:
                     best_diff, best_idx = diff, i
             if best_idx >= 0 and best_diff <= half_step:
                 highlight.add(best_idx)
                 notes_by_row.setdefault(best_idx, []).append(
-                    f"Alvo {_fmt_target(t)} ft (L = {rows[best_idx]['comprimento']:.2f} ft)"
+                    et.design_target_note(_fmt_target(t), rows[best_idx]["wormhole_length"])
                 )
             elif t > last_l:
                 missed.append(t)
@@ -340,63 +323,62 @@ def _append_design_sheets(wb, fmts, design_series: list[DesignPlotSeries], payzo
         if missed:
             last_idx = len(rows) - 1
             highlight.add(last_idx)
-            label = "Alvo" if len(missed) == 1 else "Alvos"
-            verb = "não atingido" if len(missed) == 1 else "não atingidos"
             notes_by_row.setdefault(last_idx, []).append(
-                f"{label} {_join_pt([_fmt_target(t) for t in missed])} ft {verb} — "
-                f"tabela termina em {last_l:.2f} ft (limite 1000 gal/ft)"
+                et.design_missed_note([_fmt_target(t) for t in missed], last_l)
             )
 
         sheet_rows = [
-            [r["comprimento"], r["q_opt"], r["v_opt"], r["tbt_min"], r["temperatura"],
+            [r["wormhole_length"], r["q_opt"], r["v_opt"], r["tbt_min"], r["temperature"],
              "; ".join(notes_by_row.get(i, []))]
             for i, r in enumerate(rows)
         ]
 
+        temp_c = round_celsius(series.temperature_k, 2)
         plot = ep.render_design_figure(
             [ep.DesignSeriesData(
-                label=f"{series.temperature_k} K", color=ep.color_for_index(idx),
+                label=et.design_sheet_label(temp_c), color=ep.color_for_index(idx),
                 optimum_rate_series=series.optimum_rate_series,
                 optimum_volume_series=series.optimum_volume_series,
             )],
             size="single",
         ) if include_images else None
-        name = _dedupe_sheet_name(_sanitize_sheet_name(f"Design {round(series.temperature_k)} K"), used)
-        _write_simple_sheet(wb, fmts, name, DESIGN_HEADER, sheet_rows, highlight, (0, 4), image_png=plot,
+        name = _dedupe_sheet_name(_sanitize_sheet_name(et.design_sheet_name(temp_c)), used)
+        _write_simple_sheet(wb, fmts, name, et.DESIGN_HEADER, sheet_rows, highlight, (0, 4), image_png=plot,
                              image_title="Design Plot")
 
 
 # Optimum Analysis (radial). Espelho de PVBtCalc/src/tools/analysisTable.ts --
 # linhas e Nota travadas por shared-fixtures/radial_analysis_table_cases.json.
-ANALYSIS_META = {
-    "temperature": ("temperatura", "K"),
-    "porosity": ("porosidade", "fração"),
-    "acid_concentration": ("concentração", "w/w"),
-    "wellbore_diameter": ("diâmetro do poço", "in"),
-    "payzone_thickness": ("espessura", "ft"),
-}
-
-
-def _fmt_num(x: float) -> str:
-    return format(x, ".6g")
+# The Analysis sheet's own cell-display precision. There is no on-screen Analysis table on
+# the Python side (that lives in the TS mirror, analysisTable.ts, whose ANALYSIS_DISPLAY_DECIMALS
+# this matches) -- this is what the exported cell itself carries.
+ANALYSIS_DISPLAY_DECIMALS = 3
 
 
 def _analysis_rows(a) -> list[dict]:
     from app.services.PVBTradialFunc import T_CALIBRATED_K
-    _, unit = ANALYSIS_META.get(a.sweep_param, (a.sweep_param, ""))
+    _, unit = et.analysis_axis(a.sweep_param)
+    is_temp = a.sweep_param == "temperature"
+    # T_CALIBRATED_K (Kelvin) is the internal source of truth, and the outside/skipped
+    # membership checks below compare against the RAW Kelvin sweep values the backend
+    # returned -- never a converted one. Only the DISPLAYED row["x"] and note text convert:
+    # round_celsius for the row (matching the TS mirror's decimals), kelvin_to_celsius (plain,
+    # no rounding) for note text, which has its own 6-significant-figure formatter, fmt_num.
+    to_row_x = (lambda x: round_celsius(x, ANALYSIS_DISPLAY_DECIMALS)) if is_temp else (lambda x: x)
+    to_note_x = (lambda x: kelvin_to_celsius(x)) if is_temp else (lambda x: x)
     outside = set(a.outside_calibrated_range)
     rows = []
     for x, q, v in zip(a.sweep_values, a.optimum_rate, a.optimum_volume):
         notes = []
         if x in outside:
-            notes.append(f"Fora da faixa calibrada ({T_CALIBRATED_K[0]:g}–{T_CALIBRATED_K[1]:g} K)")
-        rows.append({"x": x, "q_opt": q, "v_opt": v, "tbt_min": (v / q) if q else None, "notes": notes})
+            lo, hi = T_CALIBRATED_C if is_temp else T_CALIBRATED_K
+            notes.append(et.analysis_note_outside(lo, hi))
+        rows.append({"x": to_row_x(x), "q_opt": q, "v_opt": v, "tbt_min": (v / q) if q else None, "notes": notes})
     if a.has_clipped_volume and a.first_clipped_value is not None and rows:
-        rows[-1]["notes"].append(
-            f"Série truncada — {_fmt_num(a.first_clipped_value)} {unit} excede o limite de 1000 gal/ft")
+        rows[-1]["notes"].append(et.analysis_note_clipped(et.fmt_num(to_note_x(a.first_clipped_value)), unit))
     for x in a.skipped_values:
-        rows.append({"x": x, "q_opt": None, "v_opt": None, "tbt_min": None,
-                     "notes": ["Sem ótimo interior — ponto omitido"]})
+        rows.append({"x": to_row_x(x), "q_opt": None, "v_opt": None, "tbt_min": None,
+                     "notes": [et.analysis_note_skipped()]})
     rows.sort(key=lambda r: r["x"])
     for r in rows:
         r["nota"] = "; ".join(r["notes"])
@@ -407,16 +389,13 @@ def _append_analysis_sheet(wb, fmts, a):
     rows = _analysis_rows(a)
     if not rows:
         return
-    label, unit = ANALYSIS_META.get(a.sweep_param, (a.sweep_param, ""))
-    header = [f"{label} [{unit}]", "q_opt [gal/(ft.min)]", "V_opt [gal/ft]", "tbt [min]", "Nota"]
+    label, _unit = et.analysis_axis(a.sweep_param)
+    header = et.analysis_header(a.sweep_param)
     sheet_rows = [[r["x"], r["q_opt"], r["v_opt"], r["tbt_min"], r["nota"]] for r in rows]
     highlight = {i for i, r in enumerate(rows) if r["nota"]}
     used: set = set()
     name = _dedupe_sheet_name(_sanitize_sheet_name(f"Analysis {label}"), used)
     _write_simple_sheet(wb, fmts, name, header, sheet_rows, highlight, (0, 3))
-
-
-SKIN_HEADER = ["V_A [gal/ft]", "skin", "comprimento [ft]", "Nota"]
 
 
 def _append_skin_sheets(wb, fmts, skin_series: dict, target_skin: Optional[float], include_images: bool = True):
@@ -438,7 +417,7 @@ def _append_skin_sheets(wb, fmts, skin_series: dict, target_skin: Optional[float
         for i, p in enumerate(points):
             note = ""
             if i == target_idx:
-                note = f"Skin alvo (mais próximo de {target_skin})" if target_skin is not None else "Skin final"
+                note = et.skin_note(target_skin)
             rows.append([p.x, p.y, p.l_ft, note])
 
         plot = ep.render_skin_figure(
@@ -449,7 +428,7 @@ def _append_skin_sheets(wb, fmts, skin_series: dict, target_skin: Optional[float
             size="single",
         ) if include_images else None
         name = _dedupe_sheet_name(_sanitize_sheet_name(f"Skin {key} bbl-min"), used)
-        _write_simple_sheet(wb, fmts, name, SKIN_HEADER, rows, {target_idx}, (0, 2), image_png=plot,
+        _write_simple_sheet(wb, fmts, name, et.SKIN_HEADER, rows, {target_idx}, (0, 2), image_png=plot,
                              image_title="Skin Evolution")
 
 
@@ -466,8 +445,7 @@ def _build_inputs_rows(req: RadialExportRequest) -> list[list]:
     if inp.porosity is not None:
         rows.append(["Porosity", inp.porosity])
     if inp.temperature_k is not None:
-        rows.append(["Temperature (K)", inp.temperature_k])
-        rows.append(["Temperature (°C)", round(inp.temperature_k - 273.15, 2)])
+        rows.append(["Temperature (°C)", round_celsius(inp.temperature_k, 2)])
     if inp.wellbore_size_in is not None:
         rows.append([f"Wellbore Size (in) [{inp.wellbore_mode}]", inp.wellbore_size_in])
     if inp.wellbore_radius_in is not None:
@@ -488,7 +466,7 @@ def _build_inputs_rows(req: RadialExportRequest) -> list[list]:
         rows.append(["Number of steps", inp.number_of_steps])
 
     rows.append(["Targets", inp.targets_label or "—"])
-    rows.append(["Flowing Fraction (f)", inp.flowing_fraction if inp.flowing_fraction is not None else "não disponível"])
+    rows.append(["Flowing Fraction (f)", inp.flowing_fraction if inp.flowing_fraction is not None else et.NOT_AVAILABLE])
     return rows
 
 
@@ -535,9 +513,9 @@ def generate_all_figures(req: RadialExportRequest, size: str = "single") -> dict
 
     sorted_series = sorted(req.design_series, key=lambda s: s.temperature_k)
     for idx, s in enumerate(sorted_series):
-        stem = f"design_{s.temperature_k}K".replace(' ', '')
+        stem = et.design_figure_stem(round_celsius(s.temperature_k, 2)).replace(' ', '')
         out[stem] = ep.render_design_figure(
-            [ep.DesignSeriesData(label=f"{s.temperature_k} K", color=ep.color_for_index(idx),
+            [ep.DesignSeriesData(label=et.design_sheet_label(round_celsius(s.temperature_k, 2)), color=ep.color_for_index(idx),
                                   optimum_rate_series=s.optimum_rate_series,
                                   optimum_volume_series=s.optimum_volume_series)],
             size=size,
@@ -545,7 +523,7 @@ def generate_all_figures(req: RadialExportRequest, size: str = "single") -> dict
 
     active_temps = set(opt.active_temperatures) if opt.active_temperatures is not None else None
     design_plot_data = [
-        ep.DesignSeriesData(label=f"{s.temperature_k} K", color=ep.color_for_index(idx),
+        ep.DesignSeriesData(label=et.design_sheet_label(round_celsius(s.temperature_k, 2)), color=ep.color_for_index(idx),
                              optimum_rate_series=s.optimum_rate_series,
                              optimum_volume_series=s.optimum_volume_series)
         for idx, s in enumerate(sorted_series)
@@ -593,7 +571,7 @@ RESUMO_FIGURE_TITLES = {
 
 
 def _write_combined_figures_sheet(wb, fmts: _Formats, req: RadialExportRequest):
-    ws = wb.add_worksheet("Resumo gráficos")
+    ws = wb.add_worksheet(et.CHART_SUMMARY_SHEET)
     figures = generate_all_figures(req, size="single")
     span_cols = _title_span_cols(RESUMO_IMAGE_TARGET_WIDTH_PX)
     row = 1
