@@ -1,0 +1,55 @@
+{
+  "_doc": "Texto do export (SEMPRE em ingles, sem parametro de idioma). Contrato TS<->Python: PVBtCalc/src/tools/exportText.ts e PVBtCalc-Back/app/services/export_text.py. Carregado por src/tools/exportText.test.ts e tests/test_export_text_shared.py. Mudar uma string aqui exige mudar as duas implementacoes.",
+  "constants": {
+    "note_header": "Note",
+    "not_available": "not available",
+    "chart_summary_sheet": "Chart Summary",
+    "wormhole_length": "Wormhole Length",
+    "sim_header": ["q0 [gal/(ft.min)]", "V_A [gal/ft]", "iv [m/s]", "wv [m/s]", "dv [m/s]", "1/Da", "tbt [s]", "Note"],
+    "design_header": ["Wormhole Length [ft]", "q_opt [gal/(ft.min)]", "V_opt [gal/ft]", "tbt [min]", "Temperature [°C]", "Note"],
+    "skin_header": ["V_A [gal/ft]", "skin", "Wormhole Length [ft]", "Note"],
+    "analysis_meta": {
+      "temperature": ["Temperature", "°C"],
+      "porosity": ["Porosity", "fraction"],
+      "acid_concentration": ["Acid Concentration", "w/w"],
+      "wellbore_diameter": ["Wellbore Diameter", "in"],
+      "payzone_thickness": ["Payzone Thickness", "ft"]
+    }
+  },
+  "analysis_headers": {
+    "temperature": ["Temperature [°C]", "q_opt [gal/(ft.min)]", "V_opt [gal/ft]", "tbt [min]", "Note"],
+    "porosity": ["Porosity [fraction]", "q_opt [gal/(ft.min)]", "V_opt [gal/ft]", "tbt [min]", "Note"],
+    "acid_concentration": ["Acid Concentration [w/w]", "q_opt [gal/(ft.min)]", "V_opt [gal/ft]", "tbt [min]", "Note"],
+    "wellbore_diameter": ["Wellbore Diameter [in]", "q_opt [gal/(ft.min)]", "V_opt [gal/ft]", "tbt [min]", "Note"],
+    "payzone_thickness": ["Payzone Thickness [ft]", "q_opt [gal/(ft.min)]", "V_opt [gal/ft]", "tbt [min]", "Note"]
+  },
+  "design_sheet_naming": [
+    {"temperature_c": 23.89, "label": "23.89 C", "name": "Design 23.89 C", "figure_stem": "design_23.89C"},
+    {"temperature_c": 65.56, "label": "65.56 C", "name": "Design 65.56 C", "figure_stem": "design_65.56C"},
+    {"temperature_c": -3.15, "label": "-3.15 C", "name": "Design -3.15 C", "figure_stem": "design_-3.15C"}
+  ],
+  "notes": [
+    {"fn": "sim_note", "args": [true, "4.5800"], "expected": "Minimum at the edge of the simulated range; q_opt = 4.5800 gal/(ft·min)"},
+    {"fn": "sim_note", "args": [true, null], "expected": "Minimum at the edge of the simulated range"},
+    {"fn": "sim_note", "args": [false, "1.7300"], "expected": "Minimum V_A of this simulation; q_opt = 1.7300 gal/(ft·min)"},
+    {"fn": "sim_note", "args": [false, null], "expected": "Minimum V_A of this simulation"},
+    {"fn": "design_target_note", "args": ["10", 10.024], "expected": "Target 10 ft (Wormhole Length = 10.02 ft)"},
+    {"fn": "design_target_note", "args": ["7.5", 7.5], "expected": "Target 7.5 ft (Wormhole Length = 7.50 ft)"},
+    {"fn": "design_missed_note", "args": [["15"], 12.0], "expected": "Target 15 ft not reached — table ends at 12.00 ft (limit 1000 gal/ft)"},
+    {"fn": "design_missed_note", "args": [["15", "20"], 12.0], "expected": "Targets 15 and 20 ft not reached — table ends at 12.00 ft (limit 1000 gal/ft)"},
+    {"fn": "design_missed_note", "args": [["10", "15", "20"], 9.5], "expected": "Targets 10, 15 and 20 ft not reached — table ends at 9.50 ft (limit 1000 gal/ft)"},
+    {"fn": "analysis_note_outside", "args": [9.85, 204.85], "expected": "Outside calibrated range (9.85–204.85 °C)"},
+    {"fn": "analysis_note_skipped", "args": [], "expected": "No interior optimum — point omitted"},
+    {"fn": "analysis_note_clipped", "args": ["36.85", "°C"], "expected": "Series truncated — 36.85 °C exceeds the 1000 gal/ft limit"},
+    {"fn": "skin_note", "args": [-4], "expected": "Target skin (closest to -4)"},
+    {"fn": "skin_note", "args": [-3.5], "expected": "Target skin (closest to -3.5)"},
+    {"fn": "skin_note", "args": [-0.123456789], "expected": "Target skin (closest to -0.123457)"},
+    {"fn": "skin_note", "args": [null], "expected": "Final skin"},
+    {"fn": "linear_note", "args": [true, "4.58", "cm³/min"], "expected": "Minimum at the edge of the simulated range; q_opt = 4.58 cm³/min"},
+    {"fn": "linear_note", "args": [false, "1.73", "cm³/min"], "expected": "Minimum PVBT of this simulation; q_opt = 1.73 cm³/min"},
+    {"fn": "linear_note", "args": [false, null, "cm³/min"], "expected": "Minimum PVBT of this simulation"},
+    {"fn": "join_and", "args": [["a"]], "expected": "a"},
+    {"fn": "join_and", "args": [["a", "b"]], "expected": "a and b"},
+    {"fn": "join_and", "args": [["a", "b", "c"]], "expected": "a, b and c"}
+  ]
+}

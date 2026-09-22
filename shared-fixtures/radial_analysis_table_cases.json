@@ -1,0 +1,52 @@
+{
+  "_comment": "Linhas e Nota (texto fixo em ingles, igual ao do export) da tabela do Optimum Analysis radial. Fonte TS: PVBtCalc/src/tools/analysisTable.ts; fonte Python: _analysis_rows em PVBtCalc-Back/app/services/export_workbook.py. Ambas as suites comparam com este arquivo. `sweep_values`/`outside_calibrated_range`/`first_clipped_value` sao Kelvin (a fonte de verdade interna, T_CALIBRATED_K); quando sweep_param e 'temperature', o `x` e a nota em `expected` sao em Celsius -- a conversao acontece na fronteira (tools/temperature.ts / app/services/temperature.py), nao no dado de entrada.",
+  "cases": [
+    {
+      "name": "clean_inside_range",
+      "input": {"sweep_param": "temperature", "sweep_values": [290, 300], "optimum_rate": [2, 4], "optimum_volume": [10, 30],
+                "has_clipped_volume": false, "first_clipped_value": null, "skipped_values": [], "outside_calibrated_range": []},
+      "expected": [
+        {"x": 16.85, "q_opt": 2, "v_opt": 10, "tbt_min": 5, "nota": ""},
+        {"x": 26.85, "q_opt": 4, "v_opt": 30, "tbt_min": 7.5, "nota": ""}
+      ]
+    },
+    {
+      "name": "outside_calibrated_range",
+      "input": {"sweep_param": "temperature", "sweep_values": [270, 290], "optimum_rate": [1, 2], "optimum_volume": [4, 10],
+                "has_clipped_volume": false, "first_clipped_value": null, "skipped_values": [], "outside_calibrated_range": [270]},
+      "expected": [
+        {"x": -3.15, "q_opt": 1, "v_opt": 4, "tbt_min": 4, "nota": "Outside calibrated range (9.85–204.85 °C)"},
+        {"x": 16.85, "q_opt": 2, "v_opt": 10, "tbt_min": 5, "nota": ""}
+      ]
+    },
+    {
+      "name": "truncated_by_ceiling",
+      "input": {"sweep_param": "temperature", "sweep_values": [290, 300], "optimum_rate": [2, 4], "optimum_volume": [10, 800],
+                "has_clipped_volume": true, "first_clipped_value": 310, "skipped_values": [], "outside_calibrated_range": []},
+      "expected": [
+        {"x": 16.85, "q_opt": 2, "v_opt": 10, "tbt_min": 5, "nota": ""},
+        {"x": 26.85, "q_opt": 4, "v_opt": 800, "tbt_min": 200, "nota": "Series truncated — 36.85 °C exceeds the 1000 gal/ft limit"}
+      ]
+    },
+    {
+      "name": "no_interior_optimum_and_porosity_unit",
+      "input": {"sweep_param": "porosity", "sweep_values": [0.1, 0.3], "optimum_rate": [2, 5], "optimum_volume": [10, 20],
+                "has_clipped_volume": false, "first_clipped_value": null, "skipped_values": [0.2], "outside_calibrated_range": []},
+      "expected": [
+        {"x": 0.1, "q_opt": 2, "v_opt": 10, "tbt_min": 5, "nota": ""},
+        {"x": 0.2, "q_opt": null, "v_opt": null, "tbt_min": null, "nota": "No interior optimum — point omitted"},
+        {"x": 0.3, "q_opt": 5, "v_opt": 20, "tbt_min": 4, "nota": ""}
+      ]
+    },
+    {
+      "name": "all_notes_combined",
+      "input": {"sweep_param": "temperature", "sweep_values": [270, 290], "optimum_rate": [1, 2], "optimum_volume": [4, 900],
+                "has_clipped_volume": true, "first_clipped_value": 300.5, "skipped_values": [280], "outside_calibrated_range": [270]},
+      "expected": [
+        {"x": -3.15, "q_opt": 1, "v_opt": 4, "tbt_min": 4, "nota": "Outside calibrated range (9.85–204.85 °C)"},
+        {"x": 6.85, "q_opt": null, "v_opt": null, "tbt_min": null, "nota": "No interior optimum — point omitted"},
+        {"x": 16.85, "q_opt": 2, "v_opt": 900, "tbt_min": 450, "nota": "Series truncated — 27.35 °C exceeds the 1000 gal/ft limit"}
+      ]
+    }
+  ]
+}

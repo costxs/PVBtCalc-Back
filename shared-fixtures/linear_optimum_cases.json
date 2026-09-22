@@ -1,0 +1,134 @@
+{
+  "_doc": "Contrato TS<->Python do otimo linear (Nota, resumo, marcador). Carregado por PVBtCalc/src/tools/linearExport.shared.test.ts e PVBtCalc-Back/tests/test_linear_optimum_shared.py. Valores esperados ESCRITOS A MAO (nao gerados por nenhum dos lados). Mudar a regra de um lado so => uma das suites falha. Se a regra mudar de proposito, mude os dois lados E este arquivo.",
+  "cases": [
+    {
+      "name": "optimum_inside_sweep",
+      "input": {
+        "flowratepoints": [0.1, 0.7, 1.3, 1.9, 2.5, 3.1],
+        "pvbtpoints": [8.45, 0.585, 0.524, 0.519, 0.529, 0.54],
+        "metadata": {
+          "q_opt_cm3_min": 1.7284296238540526,
+          "validity_min_cm3_min": 0.17284296238540526,
+          "validity_max_cm3_min": 17.284296238540526,
+          "pvbt_at_q_opt": 0.5186002219352394
+        }
+      },
+      "expected": {
+        "min_idx": 3,
+        "is_border": false,
+        "note": "Minimum PVBT of this simulation; q_opt = 1.73 cm³/min",
+        "marker": { "x": 1.7284296238540526, "y": 0.5186002219352394 },
+        "summary": {
+          "q_opt [cm³/min]": 1.7284296238540526,
+          "PVBT at q_opt": 0.5186002219352394,
+          "Recommended window min = q_opt/10 [cm³/min]": 0.17284296238540526,
+          "Recommended window max = 10·q_opt [cm³/min]": 17.284296238540526,
+          "Lowest PVBT in sweep (grid-dependent)": 0.519,
+          "Flowrate at lowest swept PVBT [cm³/min]": 1.9
+        }
+      }
+    },
+    {
+      "name": "optimum_below_sweep",
+      "input": {
+        "flowratepoints": [5, 6, 7, 8, 9, 10],
+        "pvbtpoints": [0.598, 0.607, 0.615, 0.624, 0.633, 0.64],
+        "metadata": {
+          "q_opt_cm3_min": 1.7054084,
+          "validity_min_cm3_min": 0.17054084,
+          "validity_max_cm3_min": 17.054084,
+          "pvbt_at_q_opt": 0.5123
+        }
+      },
+      "expected": {
+        "min_idx": 0,
+        "is_border": true,
+        "note": "Minimum at the edge of the simulated range; q_opt = 1.71 cm³/min",
+        "marker": null,
+        "summary": {
+          "q_opt [cm³/min]": 1.7054084,
+          "PVBT at q_opt": 0.5123,
+          "Recommended window min = q_opt/10 [cm³/min]": 0.17054084,
+          "Recommended window max = 10·q_opt [cm³/min]": 17.054084,
+          "Lowest PVBT in sweep (grid-dependent)": 0.598,
+          "Flowrate at lowest swept PVBT [cm³/min]": 5
+        }
+      }
+    },
+    {
+      "name": "optimum_above_sweep",
+      "input": {
+        "flowratepoints": [0.1, 0.25, 0.5, 0.75, 1.0],
+        "pvbtpoints": [3.0, 2.0, 1.5, 1.2, 1.0],
+        "metadata": {
+          "q_opt_cm3_min": 4.58,
+          "validity_min_cm3_min": 0.458,
+          "validity_max_cm3_min": 45.8,
+          "pvbt_at_q_opt": 0.9
+        }
+      },
+      "expected": {
+        "min_idx": 4,
+        "is_border": true,
+        "note": "Minimum at the edge of the simulated range; q_opt = 4.58 cm³/min",
+        "marker": null,
+        "summary": {
+          "q_opt [cm³/min]": 4.58,
+          "PVBT at q_opt": 0.9,
+          "Recommended window min = q_opt/10 [cm³/min]": 0.458,
+          "Recommended window max = 10·q_opt [cm³/min]": 45.8,
+          "Lowest PVBT in sweep (grid-dependent)": 1.0,
+          "Flowrate at lowest swept PVBT [cm³/min]": 1.0
+        }
+      }
+    },
+    {
+      "name": "legacy_curve_without_pvbt_at_q_opt",
+      "input": {
+        "flowratepoints": [0.1, 0.7, 1.3, 1.9, 2.5, 3.1],
+        "pvbtpoints": [8.45, 0.585, 0.524, 0.519, 0.529, 0.54],
+        "metadata": {
+          "q_opt_cm3_min": 1.7284296238540526,
+          "validity_min_cm3_min": 0.17284296238540526,
+          "validity_max_cm3_min": 17.284296238540526
+        }
+      },
+      "expected": {
+        "min_idx": 3,
+        "is_border": false,
+        "note": "Minimum PVBT of this simulation; q_opt = 1.73 cm³/min",
+        "marker": null,
+        "summary": {
+          "q_opt [cm³/min]": 1.7284296238540526,
+          "PVBT at q_opt": "not available",
+          "Recommended window min = q_opt/10 [cm³/min]": 0.17284296238540526,
+          "Recommended window max = 10·q_opt [cm³/min]": 17.284296238540526,
+          "Lowest PVBT in sweep (grid-dependent)": 0.519,
+          "Flowrate at lowest swept PVBT [cm³/min]": 1.9
+        }
+      }
+    },
+    {
+      "name": "no_metadata",
+      "input": {
+        "flowratepoints": [0.1, 0.7, 1.3, 1.9, 2.5, 3.1],
+        "pvbtpoints": [8.45, 0.585, 0.524, 0.519, 0.529, 0.54],
+        "metadata": null
+      },
+      "expected": {
+        "min_idx": 3,
+        "is_border": false,
+        "note": "Minimum PVBT of this simulation",
+        "marker": null,
+        "summary": {
+          "q_opt [cm³/min]": "not available",
+          "PVBT at q_opt": "not available",
+          "Recommended window min = q_opt/10 [cm³/min]": "not available",
+          "Recommended window max = 10·q_opt [cm³/min]": "not available",
+          "Lowest PVBT in sweep (grid-dependent)": 0.519,
+          "Flowrate at lowest swept PVBT [cm³/min]": 1.9
+        }
+      }
+    }
+  ]
+}

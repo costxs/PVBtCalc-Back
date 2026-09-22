@@ -14,8 +14,10 @@ from app.routes import exportLinear, exportRadial
 from app.schemas import LinearExportRequest, RadialExportRequest
 from app.services import export_text as et
 
-FIXTURE = json.load(open(os.path.join(
-    os.path.dirname(__file__), "..", "..", "shared-fixtures", "export_text.json"), encoding="utf-8"))
+_fixture_path = os.path.join(os.path.dirname(__file__), "..", "shared-fixtures", "export_text.json")
+if not os.path.exists(_fixture_path):
+    _fixture_path = os.path.join(os.path.dirname(__file__), "..", "..", "shared-fixtures", "export_text.json")
+FIXTURE = json.load(open(_fixture_path, encoding="utf-8"))
 
 
 def test_constants_match_shared_fixture():

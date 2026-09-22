@@ -1,0 +1,4 @@
+{
+  "_comment": "Faixa calibrada de temperatura (K). Fonte: T_CALIBRATED_K em PVBtCalc-Back/app/services/PVBTradialFunc.py; espelho em PVBtCalc/src/tools/sweepValidation.ts. Ambas as suites comparam com este arquivo.",
+  "t_calibrated_k": [283, 478]
+}

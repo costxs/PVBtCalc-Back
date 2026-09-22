@@ -18,8 +18,10 @@ import pytest
 from app.schemas import LinearModelCurve
 from app.services import export_workbook_linear as ewl
 
-FIXTURE = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "..", "..", "shared-fixtures", "linear_optimum_cases.json"))
+_fixture_path = os.path.join(os.path.dirname(__file__), "..", "shared-fixtures", "linear_optimum_cases.json")
+if not os.path.exists(_fixture_path):
+    _fixture_path = os.path.join(os.path.dirname(__file__), "..", "..", "shared-fixtures", "linear_optimum_cases.json")
+FIXTURE = os.path.abspath(_fixture_path)
 with open(FIXTURE, encoding="utf-8") as f:
     CASES = json.load(f)["cases"]
 
