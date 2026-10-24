@@ -9,6 +9,7 @@ import json
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from app.core import config
@@ -60,6 +61,20 @@ def _auth_error(status: int, payload: dict) -> GatewayError:
     return GatewayError(401, "auth.err_invalid_credentials")
 
 
+def is_admin(user_id: str) -> bool:
+    """Admin = linha em public.admins. Consulta com a chave de servico; falha => nao admin."""
+    if not user_id or not config.SUPABASE_SERVICE_ROLE_KEY:
+        return False
+    try:
+        status, rows = _call(
+            "GET", f"/rest/v1/admins?select=user_id&user_id=eq.{urllib.parse.quote(user_id)}",
+            key=config.SUPABASE_SERVICE_ROLE_KEY,
+        )
+    except GatewayError:
+        return False
+    return status == 200 and isinstance(rows, list) and len(rows) > 0
+
+
 def _session(payload: dict) -> dict:
     user = payload.get("user") or {}
     meta = user.get("user_metadata") or {}
@@ -68,7 +83,10 @@ def _session(payload: dict) -> dict:
         "access_token": payload["access_token"],
         "refresh_token": payload["refresh_token"],
         "expires_in": int(payload.get("expires_in", 3600)),
-        "user": {"id": user.get("id", ""), "email": email, "name": meta.get("name") or email},
+        "user": {
+            "id": user.get("id", ""), "email": email, "name": meta.get("name") or email,
+            "is_admin": is_admin(user.get("id", "")),
+        },
     }
 
 
@@ -143,7 +161,10 @@ def get_user(access_token: str) -> dict | None:
         return None
     meta = payload.get("user_metadata") or {}
     email = payload.get("email") or ""
-    user = {"id": payload["id"], "email": email, "name": meta.get("name") or email}
+    user = {
+        "id": payload["id"], "email": email, "name": meta.get("name") or email,
+        "is_admin": is_admin(payload["id"]),
+    }
     with _cache_lock:
         if len(_cache) >= _USER_CACHE_MAX:
             _cache.clear()
@@ -159,3 +180,35 @@ def log_visit(user: dict) -> None:
     )
     if status >= 400:
         raise GatewayError(502, "auth.err_server_unavailable")
+
+
+def list_visits(limit: int = 10000) -> list[dict]:
+    status, rows = _call(
+        "GET", f"/rest/v1/visits?select=id,user_id,name,email,visited_at&order=visited_at.desc&limit={int(limit)}",
+        key=config.SUPABASE_SERVICE_ROLE_KEY,
+    )
+    if status >= 400 or not isinstance(rows, list):
+        raise GatewayError(502, "auth.err_server_unavailable")
+    return rows
+
+
+def list_users(max_pages: int = 20) -> list[dict]:
+    """Contas cadastradas (Auth admin API); so o necessario para o painel."""
+    users: list[dict] = []
+    for page in range(1, max_pages + 1):
+        status, payload = _call(
+            "GET", f"/auth/v1/admin/users?page={page}&per_page=1000", key=config.SUPABASE_SERVICE_ROLE_KEY,
+        )
+        if status >= 400 or not isinstance(payload, dict):
+            raise GatewayError(502, "auth.err_server_unavailable")
+        batch = payload.get("users") or []
+        for u in batch:
+            meta = u.get("user_metadata") or {}
+            users.append({
+                "user_id": u.get("id"), "name": meta.get("name") or u.get("email") or "",
+                "email": u.get("email") or "", "created_at": u.get("created_at"),
+                "last_sign_in_at": u.get("last_sign_in_at"),
+            })
+        if len(batch) < 1000:
+            break
+    return users

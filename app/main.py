@@ -1,5 +1,5 @@
 from fastapi import Depends, FastAPI
-from app.routes import pvbtPoint, pvbtCurve, getParameters, auth, optAnalitical, pvbtRadialCurve, skinEvolution, designPlot, exportRadial, exportLinear, optRadial
+from app.routes import pvbtPoint, pvbtCurve, getParameters, auth, optAnalitical, pvbtRadialCurve, skinEvolution, designPlot, exportRadial, exportLinear, optRadial, admin
 from app.dependencies import setup_middlewares
 from app.core.security import get_current_user
 from app.core.rate_limit import api_limiter
@@ -18,6 +18,7 @@ app.include_router(designPlot.router, dependencies=PROTECTED)
 app.include_router(exportRadial.router, dependencies=PROTECTED)
 app.include_router(exportLinear.router, dependencies=PROTECTED)
 app.include_router(optRadial.router, dependencies=PROTECTED)
+app.include_router(admin.router, dependencies=[Depends(api_limiter)])
 
 @app.get("/")
 def home():

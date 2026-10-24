@@ -19,3 +19,9 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
+
+
+def require_admin(user: dict = Depends(get_current_user)):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin.err_forbidden")
+    return user
