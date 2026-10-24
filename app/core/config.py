@@ -13,7 +13,11 @@ SUPABASE_PUBLISHABLE_KEY = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
 # Chave de servico (ignora RLS): usada somente para gravar a tabela `visits`.
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
-ALLOWED_ORIGINS = _csv("ALLOWED_ORIGINS", "https://pv-bt-calc.vercel.app,http://localhost:5173,http://127.0.0.1:5173")
+# A origem de producao do frontend e sempre permitida; ALLOWED_ORIGINS acrescenta outras.
+PRODUCTION_ORIGIN = "https://pv-bt-calc.vercel.app"
+ALLOWED_ORIGINS = list(dict.fromkeys(
+    [PRODUCTION_ORIGIN] + _csv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+))
 
 # Atras de proxy (Render, etc.) o IP real vem em X-Forwarded-For.
 TRUST_PROXY = os.environ.get("TRUST_PROXY", "").lower() in ("1", "true", "yes")
