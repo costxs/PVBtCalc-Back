@@ -18,10 +18,10 @@ SESSION_COOKIE = "pvbtcalc_session"
 # Cookie so via HTTPS em producao; COOKIE_SECURE=false para testar em http://localhost.
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() not in ("0", "false", "no")
 
-# A origem de producao do frontend e sempre permitida; ALLOWED_ORIGINS acrescenta outras.
-PRODUCTION_ORIGIN = "https://pv-bt-calc.vercel.app"
+# As origens de producao do frontend sao sempre permitidas; ALLOWED_ORIGINS acrescenta outras.
+PRODUCTION_ORIGINS = ["https://pvbtcalc.lcpetro.io", "https://pv-bt-calc.vercel.app"]
 ALLOWED_ORIGINS = list(dict.fromkeys(
-    [PRODUCTION_ORIGIN] + _csv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+    PRODUCTION_ORIGINS + _csv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 ))
 
 # Atras de proxy (Render, etc.) o IP real vem em X-Forwarded-For.
