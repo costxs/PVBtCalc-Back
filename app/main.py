@@ -1,9 +1,23 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from app.routes import pvbtPoint, pvbtCurve, getParameters, auth, optAnalitical, pvbtRadialCurve, skinEvolution, designPlot, exportRadial, exportLinear, optRadial, admin
 from app.dependencies import setup_middlewares
 from app.core.security import get_current_user
 from app.core.rate_limit import api_limiter
-app = FastAPI(title="Meu Projeto FastAPI", docs_url=None, redoc_url=None, openapi_url=None)
+from app.core import config, db_gateway
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    for name in ("DATABASE_URL", "SECRET_KEY"):
+        if not getattr(config, name):
+            print(f"AVISO: variavel {name} nao definida -- login/cadastro vao responder 503")
+    yield
+    db_gateway.close_pool()
+
+
+app = FastAPI(title="Meu Projeto FastAPI", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 setup_middlewares(app)
 # Toda rota de calculo/exportacao exige sessao valida + limite de requisicoes por IP.
 PROTECTED = [Depends(api_limiter), Depends(get_current_user)]

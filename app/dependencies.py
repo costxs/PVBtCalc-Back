@@ -50,7 +50,8 @@ def setup_middlewares(app):
     app.middleware("http")(_catch_all_errors)
     app.middleware("http")(_security_layer)
 
-    # Autenticacao e por Bearer token (sem cookies): nao ha credenciais de navegador a proteger.
+    # O frontend autentica por Bearer token. O cookie de sessao (SameSite=Lax) so vale
+    # no mesmo site; sem allow_credentials o navegador nao o envia entre origens.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.ALLOWED_ORIGINS,

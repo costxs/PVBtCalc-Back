@@ -1,15 +1,20 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 
-from app.core import supabase_gateway as gateway
+from app.core import config
+from app.core import db_gateway as gateway
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    """Exige uma sessao Supabase valida (token verificado no Auth, nao so decodificado)."""
+def get_current_user(request: Request, token: str | None = Depends(oauth2_scheme)):
+    """Exige sessao valida: Bearer token (frontend) ou o cookie de sessao assinado."""
     try:
-        user = gateway.get_user(token)
+        if token:
+            user = gateway.get_user(token)
+        else:
+            cookie = request.cookies.get(config.SESSION_COOKIE)
+            user = gateway.get_user(cookie, kind="refresh") if cookie else None
     except gateway.GatewayError as e:
         raise HTTPException(status_code=e.status, detail=e.code)
     if user is None:

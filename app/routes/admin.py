@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.core import supabase_gateway as gateway
+from app.core import db_gateway as gateway
 from app.core.security import require_admin
 
 router = APIRouter(prefix="/admin", tags=["Admin"], dependencies=[Depends(require_admin)])

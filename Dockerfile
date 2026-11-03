@@ -1,7 +1,10 @@
+# Python 3.13: scipy 1.18 / matplotlib 3.11 (usados nos calculos validados) nao tem build para 3.11.
 FROM python:3.13.15-slim
 
 # No display in the container: force the non-interactive backend
-ENV MPLBACKEND=Agg
+ENV MPLBACKEND=Agg \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
@@ -15,4 +18,7 @@ RUN python -c "import matplotlib.pyplot as plt, io; f = plt.figure(); f.add_subp
 
 COPY . .
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8000
+
+# --proxy-headers: atras do proxy do Coolify, respeita X-Forwarded-Proto/For
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
