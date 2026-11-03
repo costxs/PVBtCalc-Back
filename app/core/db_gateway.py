@@ -108,13 +108,33 @@ def _read_token(kind: str, token: str, max_age: int) -> str | None:
 
 # --- usuarios --------------------------------------------------------------------
 
-def _meta_name(meta, email: str) -> str:
-    if isinstance(meta, str):
-        try:
-            meta = json.loads(meta)
-        except ValueError:
-            meta = {}
-    return (meta or {}).get("name") or email
+# A copia de auth.users pode nao ter todas as colunas do Supabase. So id, email e
+# encrypted_password sao obrigatorias; as demais sao usadas se existirem.
+_users_cols: frozenset[str] | None = None
+
+
+def _cols() -> frozenset[str]:
+    global _users_cols
+    if _users_cols is None:
+        rows = _query(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = 'auth' AND table_name = 'users'"
+        )
+        if rows:  # nao guarda resultado vazio (tabela inacessivel): tenta de novo depois
+            _users_cols = frozenset(r["column_name"] for r in rows)
+            print(f"auth.users: colunas encontradas = {sorted(_users_cols)}")
+        return frozenset(r["column_name"] for r in rows)
+    return _users_cols
+
+
+def _name_sql(cols: frozenset[str]) -> str:
+    for meta in ("raw_user_meta_data", "user_metadata"):
+        if meta in cols:
+            return f"({meta}::jsonb ->> 'name')"
+    return "name::text" if "name" in cols else "NULL::text"
+
+
+def _opt(col: str, cols: frozenset[str], cast: str = "timestamptz") -> str:
+    return f"{col}" if col in cols else f"NULL::{cast}"
 
 
 def is_admin(user_id: str) -> bool:
@@ -130,15 +150,12 @@ def is_admin(user_id: str) -> bool:
 
 def _profile(row: dict) -> dict:
     email = row.get("email") or ""
-    return {
-        "id": row["id"], "email": email, "name": _meta_name(row.get("raw_user_meta_data"), email),
-        "is_admin": is_admin(row["id"]),
-    }
+    return {"id": row["id"], "email": email, "name": row.get("name") or email, "is_admin": is_admin(row["id"])}
 
 
 def _load_user(user_id: str) -> dict | None:
     row = _query(
-        "SELECT id::text AS id, email, raw_user_meta_data FROM auth.users WHERE id::text = %s",
+        f"SELECT id::text AS id, email, {_name_sql(_cols())} AS name FROM auth.users WHERE id::text = %s",
         (user_id,), fetch="one",
     )
     return _profile(row) if row else None
@@ -162,34 +179,47 @@ def _check_password(password: str, hashed: str | None) -> bool:
 
 
 def sign_up(email: str, password: str, name: str) -> dict:
+    cols = _cols()
     exists = _query("SELECT 1 AS ok FROM auth.users WHERE lower(email) = lower(%s) LIMIT 1", (email,), fetch="one")
     if exists:
         raise GatewayError(409, "auth.err_email_in_use")
     hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt(10)).decode()
+    fields = {"id": ("%s", str(uuid.uuid4())), "email": ("lower(%s)", email), "encrypted_password": ("%s", hashed)}
+    meta = next((m for m in ("raw_user_meta_data", "user_metadata") if m in cols), None)
+    if meta:
+        fields[meta] = ("%s::jsonb", json.dumps({"name": name}))
+    elif "name" in cols:
+        fields["name"] = ("%s", name)
+    for col in ("email_confirmed_at", "created_at", "updated_at"):
+        if col in cols:
+            fields[col] = ("now()", None)
+    names = ", ".join(fields)
+    values = ", ".join(v[0] for v in fields.values())
+    params = tuple(v[1] for v in fields.values() if v[0] != "now()")
     row = _query(
-        """INSERT INTO auth.users
-               (id, email, encrypted_password, email_confirmed_at, raw_user_meta_data, created_at, updated_at)
-           VALUES (%s, lower(%s), %s, now(), %s::jsonb, now(), now())
-           RETURNING id::text AS id, email, raw_user_meta_data""",
-        (str(uuid.uuid4()), email, hashed, json.dumps({"name": name})), fetch="one",
+        f"INSERT INTO auth.users ({names}) VALUES ({values}) RETURNING id::text AS id, email, {_name_sql(cols)} AS name",
+        params, fetch="one",
     )
     return {"confirm_email": False, "session": _session(_profile(row))}
 
 
 def sign_in(email: str, password: str) -> dict:
+    cols = _cols()
     row = _query(
-        """SELECT id::text AS id, email, encrypted_password, raw_user_meta_data, email_confirmed_at
-           FROM auth.users WHERE lower(email) = lower(%s) LIMIT 1""",
+        f"""SELECT id::text AS id, email, encrypted_password, {_name_sql(cols)} AS name,
+                   {_opt("email_confirmed_at", cols)} AS email_confirmed_at
+            FROM auth.users WHERE lower(email) = lower(%s) LIMIT 1""",
         (email,), fetch="one",
     )
     if not _check_password(password, row and row.get("encrypted_password")) or row is None:
         raise GatewayError(401, "auth.err_invalid_credentials")
-    if row.get("email_confirmed_at") is None:
+    if "email_confirmed_at" in cols and row.get("email_confirmed_at") is None:
         raise GatewayError(403, "auth.err_email_not_confirmed")
-    try:
-        _query("UPDATE auth.users SET last_sign_in_at = now() WHERE id::text = %s", (row["id"],), fetch="none")
-    except GatewayError:
-        pass  # so informativo: nao impede o login
+    if "last_sign_in_at" in cols:
+        try:
+            _query("UPDATE auth.users SET last_sign_in_at = now() WHERE id::text = %s", (row["id"],), fetch="none")
+        except GatewayError:
+            pass  # so informativo: nao impede o login
     return _session(_profile(row))
 
 
@@ -255,14 +285,17 @@ def list_visits(limit: int = 10000) -> list[dict]:
 
 def list_users(limit: int = 20000) -> list[dict]:
     """Contas cadastradas; so o necessario para o painel."""
+    cols = _cols()
+    order = "created_at" if "created_at" in cols else "email"
     rows = _query(
-        """SELECT id::text AS user_id, email, raw_user_meta_data, created_at, last_sign_in_at
-           FROM auth.users ORDER BY created_at LIMIT %s""",
+        f"""SELECT id::text AS user_id, email, {_name_sql(cols)} AS name,
+                   {_opt("created_at", cols)} AS created_at, {_opt("last_sign_in_at", cols)} AS last_sign_in_at
+            FROM auth.users ORDER BY {order} LIMIT %s""",
         (int(limit),),
     )
     return [
         {
-            "user_id": r["user_id"], "name": _meta_name(r.get("raw_user_meta_data"), r.get("email") or ""),
+            "user_id": r["user_id"], "name": r.get("name") or r.get("email") or "",
             "email": r.get("email") or "", "created_at": r.get("created_at"),
             "last_sign_in_at": r.get("last_sign_in_at"),
         }

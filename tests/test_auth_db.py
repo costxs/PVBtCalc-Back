@@ -46,7 +46,9 @@ def client():
         )
         conn.execute("INSERT INTO public.admins (user_id) VALUES (%s)", (ADMIN_ID,))
 
-    from app.core import config
+    from app.core import config, db_gateway
+    db_gateway._users_cols = None
+    db_gateway._cache.clear()
     config.DATABASE_URL = DB_URL
     config.SECRET_KEY = "test-secret-key"
     config.COOKIE_SECURE = False
