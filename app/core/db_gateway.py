@@ -301,3 +301,64 @@ def list_users(limit: int = 20000) -> list[dict]:
         }
         for r in rows
     ]
+
+
+# --- tour guiado (onboarding) --------------------------------------------------------
+
+TOUR_TRACKS = ("linear", "radial", "export")
+_onboarding_ready = False
+
+
+def ensure_onboarding_table() -> None:
+    """Cria public.user_onboarding na primeira vez. Nessa criacao, todo usuario que ja
+    existe recebe as tres trilhas como concluidas: o tour so abre sozinho para quem se
+    cadastrar depois."""
+    global _onboarding_ready
+    if _onboarding_ready:
+        return
+    try:
+        with _get_pool().connection(timeout=10) as conn:
+            with conn.transaction():
+                conn.execute("SELECT pg_advisory_xact_lock(724001)")
+                existed = conn.execute(
+                    "SELECT to_regclass('public.user_onboarding') IS NOT NULL AS ok"
+                ).fetchone()["ok"]
+                if not existed:
+                    conn.execute(
+                        """CREATE TABLE public.user_onboarding (
+                               user_id text NOT NULL,
+                               track text NOT NULL,
+                               completed_at timestamptz NOT NULL DEFAULT now(),
+                               PRIMARY KEY (user_id, track))"""
+                    )
+                    conn.execute(
+                        """INSERT INTO public.user_onboarding (user_id, track)
+                           SELECT u.id::text, t.track FROM auth.users u
+                           CROSS JOIN unnest(%s::text[]) AS t(track)""",
+                        (list(TOUR_TRACKS),),
+                    )
+        _onboarding_ready = True
+    except GatewayError:
+        raise
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        raise GatewayError(503, "auth.err_server_unavailable")
+
+
+def get_onboarding(user_id: str) -> dict:
+    ensure_onboarding_table()
+    rows = _query(
+        "SELECT track, completed_at FROM public.user_onboarding WHERE user_id = %s", (user_id,)
+    )
+    done = {r["track"]: r["completed_at"] for r in rows}
+    return {t: done.get(t) for t in TOUR_TRACKS}
+
+
+def mark_onboarding(user_id: str, track: str) -> None:
+    ensure_onboarding_table()
+    _query(
+        """INSERT INTO public.user_onboarding (user_id, track) VALUES (%s, %s)
+           ON CONFLICT (user_id, track) DO NOTHING""",
+        (user_id, track), fetch="none",
+    )

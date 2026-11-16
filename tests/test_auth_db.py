@@ -26,7 +26,7 @@ def client():
     supabase_hash = bcrypt.hashpw(PASSWORD.encode(), bcrypt.gensalt(10, prefix=b"2a")).decode()
     with psycopg.connect(DB_URL, autocommit=True) as conn:
         conn.execute("""
-            DROP SCHEMA IF EXISTS auth CASCADE; DROP TABLE IF EXISTS public.admins, public.visits;
+            DROP SCHEMA IF EXISTS auth CASCADE; DROP TABLE IF EXISTS public.admins, public.visits, public.user_onboarding;
             CREATE SCHEMA auth;
             CREATE TABLE auth.users (
                 instance_id uuid, id uuid PRIMARY KEY, aud varchar(255), role varchar(255),
@@ -48,6 +48,7 @@ def client():
 
     from app.core import config, db_gateway
     db_gateway._users_cols = None
+    db_gateway._onboarding_ready = False
     db_gateway._cache.clear()
     config.DATABASE_URL = DB_URL
     config.SECRET_KEY = "test-secret-key"
@@ -133,3 +134,24 @@ def test_calc_routes_require_session(client):
     client.cookies.clear()
     # com sessao, passa da autenticacao e cai na validacao do corpo
     assert client.post("/pvbtpoint", json={}, headers={"Authorization": f"Bearer {token}"}).status_code == 422
+
+
+def test_onboarding_existing_users_skip_tour_new_users_see_it(client):
+    client.cookies.clear()
+    assert client.get("/me/onboarding").status_code == 401
+    # admin ja existia quando a tabela foi criada: tudo concluido
+    token = _login(client, "admin@lcpetro.com", PASSWORD).json()["access_token"]
+    client.cookies.clear()
+    h = {"Authorization": f"Bearer {token}"}
+    done = client.get("/me/onboarding", headers=h).json()
+    assert set(done) == {"linear", "radial", "export"} and all(done.values())
+    # cadastrado depois: tudo pendente
+    r = client.post("/auth/register", json={"name": "Tour", "email": "tour@lcpetro.com", "password": "abcdef"})
+    client.cookies.clear()
+    h = {"Authorization": f"Bearer {r.json()['session']['access_token']}"}
+    assert client.get("/me/onboarding", headers=h).json() == {"linear": None, "radial": None, "export": None}
+    assert client.patch("/me/onboarding", headers=h, json={"track": "linear"}).status_code == 204
+    assert client.patch("/me/onboarding", headers=h, json={"track": "linear"}).status_code == 204  # idempotente
+    assert client.patch("/me/onboarding", headers=h, json={"track": "outra"}).status_code == 422
+    after = client.get("/me/onboarding", headers=h).json()
+    assert after["linear"] and after["radial"] is None and after["export"] is None

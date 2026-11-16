@@ -20,7 +20,7 @@ def client():
     hashed = bcrypt.hashpw(PASSWORD.encode(), bcrypt.gensalt(10, prefix=b"2a")).decode()
     with psycopg.connect(DB_URL, autocommit=True) as conn:
         conn.execute("""
-            DROP SCHEMA IF EXISTS auth CASCADE; DROP TABLE IF EXISTS public.admins, public.visits;
+            DROP SCHEMA IF EXISTS auth CASCADE; DROP TABLE IF EXISTS public.admins, public.visits, public.user_onboarding;
             CREATE SCHEMA auth;
             CREATE TABLE auth.users (id uuid PRIMARY KEY, email text, encrypted_password text);
             CREATE TABLE public.admins (user_id uuid PRIMARY KEY);
@@ -32,6 +32,7 @@ def client():
 
     from app.core import config, db_gateway
     db_gateway._users_cols = None
+    db_gateway._onboarding_ready = False
     db_gateway._cache.clear()
     config.DATABASE_URL = DB_URL
     config.SECRET_KEY = "test-secret-key"

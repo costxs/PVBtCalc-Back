@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
-from app.routes import pvbtPoint, pvbtCurve, getParameters, auth, optAnalitical, pvbtRadialCurve, skinEvolution, designPlot, exportRadial, exportLinear, optRadial, admin
+from app.routes import pvbtPoint, pvbtCurve, getParameters, auth, optAnalitical, pvbtRadialCurve, skinEvolution, designPlot, exportRadial, exportLinear, optRadial, admin, me
 from app.dependencies import setup_middlewares
 from app.core.security import get_current_user
 from app.core.rate_limit import api_limiter
@@ -13,6 +13,12 @@ async def lifespan(_app):
     for name in ("DATABASE_URL", "SECRET_KEY"):
         if not getattr(config, name):
             print(f"AVISO: variavel {name} nao definida -- login/cadastro vao responder 503")
+    if config.DATABASE_URL:
+        try:
+            # cria a tabela do tour ja no deploy: quem existe agora nao ve o tour sozinho
+            db_gateway.ensure_onboarding_table()
+        except db_gateway.GatewayError:
+            print("AVISO: nao foi possivel preparar public.user_onboarding agora; tento de novo no primeiro acesso")
     yield
     db_gateway.close_pool()
 
@@ -33,6 +39,7 @@ app.include_router(exportRadial.router, dependencies=PROTECTED)
 app.include_router(exportLinear.router, dependencies=PROTECTED)
 app.include_router(optRadial.router, dependencies=PROTECTED)
 app.include_router(admin.router, dependencies=[Depends(api_limiter)])
+app.include_router(me.router, dependencies=[Depends(api_limiter)])
 
 @app.get("/")
 def home():
