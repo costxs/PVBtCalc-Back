@@ -5,7 +5,7 @@ from app.routes import pvbtPoint, pvbtCurve, getParameters, auth, optAnalitical,
 from app.dependencies import setup_middlewares
 from app.core.security import get_current_user
 from app.core.rate_limit import api_limiter
-from app.core import config, db_gateway
+from app.core import config, db_gateway, simulations_store
 
 
 @asynccontextmanager
@@ -17,8 +17,9 @@ async def lifespan(_app):
         try:
             # cria a tabela do tour ja no deploy: quem existe agora nao ve o tour sozinho
             db_gateway.ensure_onboarding_table()
+            simulations_store.ensure_table()
         except db_gateway.GatewayError:
-            print("AVISO: nao foi possivel preparar public.user_onboarding agora; tento de novo no primeiro acesso")
+            print("AVISO: nao foi possivel preparar as tabelas do app agora; tento de novo no primeiro acesso")
     yield
     db_gateway.close_pool()
 

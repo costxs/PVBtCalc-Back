@@ -56,7 +56,7 @@ def setup_middlewares(app):
         CORSMiddleware,
         allow_origins=config.ALLOWED_ORIGINS,
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type"],
         expose_headers=["Content-Disposition"],
     )
